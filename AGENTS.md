@@ -19,9 +19,10 @@ not feel like a webpage), auto/light/dark theme stored server-side.
 ```
 run.py                     entry: --config/--db/--host/--port; default port 8961
 filmnotes/
-  db.py                    ALL SQL lives here. Schema, seeds (SEED_CAMERAS,
-                           SEED_FILMS), settings key/value, list_* rows carry
-                           used_count + last_used for MRU sorting.
+  db.py                    ALL SQL lives here. Schema, additive _migrate,
+                           seeds (SEED_CAMERAS, SEED_FILMS), settings key/value,
+                           list_* rows carry used_count + last_used for MRU
+                           sorting. shot_at/visited_at are the sort keys.
   web.py                   create_app(db_path). Thin routes, no SQL.
                            _body()/_str()/_note()/_num() input hygiene;
                            /api/* errors are ALWAYS JSON, never HTML 500.
@@ -67,6 +68,15 @@ the ui tier fails with "Executable doesn't exist" and you must
 - **Flask + SQLite (WAL) + vanilla JS, no build step** — matches rssgate,
   which the user runs on their tailnet. One process, one file of JS, one
   stylesheet.
+- **Shot/visit dates are local naive strings** `"YYYY-MM-DD HH:MM"` (what
+  `datetime-local` gives you, T normalized to a space). Fixed width, so
+  plain string sort orders them; the user's wall-clock time is the point,
+  so no timezone conversion happens anywhere. `created_at` stays UTC ISO
+  for auditing. `_datetime()` in web.py validates/normalizes input.
+  Sorting: `shot_at DESC, id DESC` (ties within a minute fall back to
+  creation order). MRU `last_used` = `MAX(COALESCE(shot_at, created_at))`.
+  A roll that implicitly creates its location gives it its shot_at as
+  visited_at; `touch_location_visit` only ever moves visited_at forward.
 - **Settings live in SQLite (key/value `settings` table), not YAML** — the
   spec says "stored server side" and shared across devices; the theme must
   survive reloads and apply server-side in the template (`data-theme`) to
@@ -119,9 +129,13 @@ the ui tier fails with "Executable doesn't exist" and you must
 1. Seeds: 6 cameras, 15 films, re-running init_db never duplicates.
 2. `GET /api/rolls` rows carry camera/film/location NAMES (roll page shows
    location under the roll); `GET /api/locations` nests rolls per location.
+   Both pages sort by the user-visible date (shot_at / visited_at) newest
+   first, `id DESC` as tiebreak — never by created_at or id alone.
 3. POST /api/rolls requires valid camera_id + film_id (ints) and either
    location_id or a non-empty location_name; bad input => 400 JSON.
-4. lat/lon arrive together, in range; theme is only auto|light|dark.
+4. lat/lon arrive together, in range; theme is only auto|light|dark;
+   shot_at/visited_at must parse as `YYYY-MM-DD HH:MM` (T tolerated,
+   optional seconds) or 400; absent defaults to server-local now.
 5. Bottom bar visible on every page and while roll/location popovers are
    open; hidden only with settings open.
 6. No horizontal overflow at 390px width; no console errors on any screen
@@ -165,7 +179,9 @@ the ui tier fails with "Executable doesn't exist" and you must
 ## Guardrails (REAL project)
 
 - GitHub account must be `nkavassalis` (verify `gh auth status` before
-  any push; STOP if it's anyone else). Repo is PRIVATE.
+  any push; STOP if it's anyone else). Repo `nkavassalis/filmNotes` is
+  **PUBLIC by the user's explicit decision** — the public-forever rule
+  and the no-secrets/no-internal-details rule matter extra here.
 - Never push broken or untested code: BOTH tiers green first —
   `.venv/bin/python -m pytest` AND `.venv/bin/python -m pytest -m ui`
   (14 browser tests incl. computed-style and geometry assertions; the

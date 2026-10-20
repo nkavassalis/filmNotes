@@ -7,9 +7,11 @@ installs to the home screen, and keeps everything on your own server.
 
 ## What it does
 
-- **Rolls** — every roll you log: camera, film, location, optional note,
-  newest first. The location sits under each roll.
-- **Locations** — every place you've shot, with its rolls listed under it.
+- **Rolls** — every roll you log: camera, film, location, the date it was
+  shot, optional note. Sorted by shot date, newest first. The location
+  sits under each roll.
+- **Locations** — every place you've shot, with its rolls listed under it,
+  sorted by visit date, newest first.
 - **Cameras / Film** — the gear lists that feed the New Roll dropdowns.
   Seeded with the usual suspects (Leica MP/M6, Canon 1V, Pentax 67/645N2,
   Bronica SQ-A; Portra, Delta, HP5, Tri-X, T-Max, Velvia, Provia, Acros,
@@ -18,11 +20,12 @@ installs to the home screen, and keeps everything on your own server.
 - **New Roll** (bottom bar) — popover with Camera and Film dropdowns, a
   Location field with a friendly name derived from the device location
   service (tap the crosshair to detect; the field is always editable so
-  you can override with your own name), and an optional note. Typing a
-  brand-new place name creates the location for you.
-- **New Location** (bottom bar) — popover with the same location field +
-  note. It also shows the current camera and current roll as read-only
-  context.
+  you can override with your own name), a **Shot on** date/time (defaults
+  to now, editable), and an optional note. Typing a brand-new place name
+  creates the location for you.
+- **New Location** (bottom bar) — popover with the same location field,
+  a **Visited on** date/time (defaults to now, editable), and a note. It
+  also shows the current camera and current roll as read-only context.
 - **Settings** (cog, top right) — UI theme: Auto (follows the system),
   Light, or Dark. Stored server-side, so every device you use agrees.
 - **Pages drawer** — hamburger (top left) or swipe from the left edge

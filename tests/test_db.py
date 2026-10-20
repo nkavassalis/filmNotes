@@ -1,4 +1,5 @@
-"""Hermetic DB tests: seeding, CRUD, MRU data, current roll, settings."""
+"""Hermetic DB tests: seeding, CRUD, MRU data, current roll, settings,
+shot/visit dates, migration."""
 from filmnotes import db
 
 
@@ -66,7 +67,7 @@ def test_locations_page_groups_rolls(conn):
     assert len(locs["Battery Spencer"]["rolls"]) == 2
     assert len(locs["Point Reyes"]["rolls"]) == 1
     r = locs["Battery Spencer"]["rolls"][0]
-    assert r["camera"] and r["film"] and r["created_at"]
+    assert r["camera"] and r["film"] and r["shot_at"]
 
 
 def test_mru_fields(conn):
@@ -107,3 +108,84 @@ def test_current_roll_is_newest(conn):
     cur = db.current_roll(conn)
     assert cur["id"] == newer["id"]
     assert cur["camera"] == "Canon 1V"  # list_cameras[1] is alphabetical
+
+
+# ------------------------------------------------------- shot / visit dates
+
+def _ids(rows):
+    return [r["id"] for r in rows]
+
+
+def test_add_roll_defaults_shot_at_now(conn):
+    cam, film = db.list_cameras(conn)[0]["id"], db.list_films(conn)[0]["id"]
+    loc = db.add_location(conn, "Home")
+    roll = db.add_roll(conn, cam, film, loc["id"])
+    assert len(roll["shot_at"]) == 16 and roll["shot_at"][4] == "-" \
+        and roll["shot_at"][10] == " "
+
+
+def test_rolls_sort_by_shot_at_not_creation(conn):
+    cam, film = db.list_cameras(conn)[0]["id"], db.list_films(conn)[0]["id"]
+    loc = db.add_location(conn, "Home")
+    recent = db.add_roll(conn, cam, film, loc["id"],
+                         shot_at="2024-06-01 09:00")
+    old = db.add_roll(conn, cam, film, loc["id"], shot_at="2020-01-01 10:00")
+    assert _ids(db.list_rolls(conn)) == [recent["id"], old["id"]]
+
+
+def test_locations_sort_by_visited_at_and_roll_touch_refreshes(conn):
+    cam, film = db.list_cameras(conn)[0]["id"], db.list_films(conn)[0]["id"]
+    old_loc = db.add_location(conn, "Old Place", visited_at="2019-01-01 12:00")
+    new_loc = db.add_location(conn, "New Place", visited_at="2024-01-01 12:00")
+    names = [l["name"] for l in db.list_locations(conn)]
+    assert names == ["New Place", "Old Place"]
+    # a roll shot long ago in Old Place must NOT drag its visited date back
+    db.add_roll(conn, cam, film, old_loc["id"], shot_at="2018-05-05 08:00")
+    locs = {l["name"]: l for l in db.list_locations(conn)}
+    assert locs["Old Place"]["visited_at"] == "2019-01-01 12:00"
+    # ...but a newer roll moves it forward
+    db.add_roll(conn, cam, film, old_loc["id"], shot_at="2025-02-02 08:00")
+    locs = {l["name"]: l for l in db.list_locations(conn)}
+    assert locs["Old Place"]["visited_at"] == "2025-02-02 08:00"
+    assert [l["name"] for l in db.list_locations(conn)][0] == "Old Place"
+
+
+def test_rolls_under_location_sort_by_shot_at(conn):
+    cam, film = db.list_cameras(conn)[0]["id"], db.list_films(conn)[0]["id"]
+    loc = db.add_location(conn, "Beach")
+    db.add_roll(conn, cam, film, loc["id"], shot_at="2024-01-01 09:00")
+    newer = db.add_roll(conn, cam, film, loc["id"], shot_at="2024-06-01 09:00")
+    locs = {l["name"]: l for l in db.list_locations(conn)}
+    assert locs["Beach"]["rolls"][0]["id"] == newer["id"]
+
+
+def test_mru_last_used_follows_shot_at(conn):
+    cam = db.list_cameras(conn)[0]["id"]
+    film = db.list_films(conn)[0]["id"]
+    loc = db.add_location(conn, "Home")
+    db.add_roll(conn, cam, film, loc["id"], shot_at="2030-01-01 00:00")
+    cams = {c["name"]: c for c in db.list_cameras(conn)}
+    assert cams[[c["name"] for c in db.list_cameras(conn)][0]]["last_used"] \
+        == "2030-01-01 00:00"
+
+
+def test_current_roll_by_shot_at(conn):
+    cam, film = db.list_cameras(conn)[0]["id"], db.list_films(conn)[0]["id"]
+    loc = db.add_location(conn, "Home")
+    db.add_roll(conn, cam, film, loc["id"], shot_at="2020-01-01 10:00")
+    newest = db.add_roll(conn, cam, film, loc["id"], shot_at="2024-01-01 10:00")
+    assert db.current_roll(conn)["id"] == newest["id"]
+
+
+def test_migrate_backfills_dates_on_old_schema(conn):
+    cam, film = db.list_cameras(conn)[0]["id"], db.list_films(conn)[0]["id"]
+    loc = db.add_location(conn, "Legacy")
+    roll = db.add_roll(conn, cam, film, loc["id"])
+    # simulate a pre-feature database
+    conn.execute("ALTER TABLE rolls DROP COLUMN shot_at")
+    conn.execute("ALTER TABLE locations DROP COLUMN visited_at")
+    db.init_db(conn)  # must re-add the columns and backfill from created_at
+    r = db.list_rolls(conn)[0]
+    assert r["shot_at"] == roll["created_at"][:16].replace("T", " ")
+    assert db.list_locations(conn)[0]["visited_at"] == \
+        loc["created_at"][:16].replace("T", " ")

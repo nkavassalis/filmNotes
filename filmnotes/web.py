@@ -4,6 +4,7 @@
 requires a JSON object (400 otherwise); _str()/_num() coerce and bound.
 """
 import os
+from datetime import datetime
 
 from flask import Flask, jsonify, render_template, request
 
@@ -44,6 +45,26 @@ def _str(data, key, required=False, max_len=MAX_NAME, default=""):
 
 def _note(data, key="note"):
     return _str(data, key, max_len=MAX_NOTE)
+
+
+def _datetime(data, key):
+    """Optional 'YYYY-MM-DD HH:MM' (T separator tolerated, optional :SS).
+
+    Normalized to 'YYYY-MM-DD HH:MM' (fixed width -> string-sortable).
+    Returns None when absent/empty.
+    """
+    v = data.get(key)
+    if v is None or v == "":
+        return None
+    if not isinstance(v, str):
+        raise BadRequest(f"{key} must be a string")
+    v = v.strip().replace("T", " ")
+    for fmt in ("%Y-%m-%d %H:%M", "%Y-%m-%d %H:%M:%S"):
+        try:
+            return datetime.strptime(v, fmt).strftime("%Y-%m-%d %H:%M")
+        except ValueError:
+            pass
+    raise BadRequest(f"{key} must look like YYYY-MM-DD HH:MM")
 
 
 def _num(data, key):
@@ -107,6 +128,7 @@ def create_app(db_path, conn=None):
         if db.get_film(conn, data["film_id"]) is None:
             raise BadRequest("unknown film_id")
         note = _note(data)
+        shot_at = _datetime(data, "shot_at")
         if data.get("location_id") is not None:
             loc = db.get_location(conn, data["location_id"])
             if loc is None:
@@ -115,9 +137,9 @@ def create_app(db_path, conn=None):
         else:
             name = _str(data, "location_name", required=True)
             loc = db.get_or_create_location(
-                conn, name, _num(data, "lat"), _num(data, "lon"))
+                conn, name, _num(data, "lat"), _num(data, "lon"), shot_at)
         roll = db.add_roll(conn, data["camera_id"], data["film_id"],
-                           loc["id"], note)
+                           loc["id"], note, shot_at)
         roll["location"] = loc["name"]
         return jsonify(roll), 201
 
@@ -136,10 +158,12 @@ def create_app(db_path, conn=None):
         data = _body()
         name = _str(data, "name", required=True)
         note = _note(data)
+        visited_at = _datetime(data, "visited_at")
         lat, lon = _num(data, "lat"), _num(data, "lon")
         if (lat is None) != (lon is None):
             raise BadRequest("lat and lon must come together")
-        return jsonify(db.add_location(conn, name, note, lat, lon)), 201
+        return jsonify(db.add_location(conn, name, note, lat, lon,
+                                       visited_at)), 201
 
     # ------------------------------------------------------------ cameras
 

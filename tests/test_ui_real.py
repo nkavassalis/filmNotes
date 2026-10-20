@@ -229,12 +229,14 @@ def goto_page(page, name):
     page.wait_for_selector(f"h1.page-title:has-text('{name.capitalize()}')")
 
 
-def create_roll(page, camera, film, location, note=""):
+def create_roll(page, camera, film, location, note="", shot=None):
     page.click("#new-roll-btn")
     page.wait_for_selector("#roll-modal:visible")
     page.select_option("#roll-camera", label=camera)
     page.select_option("#roll-film", label=film)
     page.fill("#roll-location", location)
+    if shot:
+        page.fill("#roll-shot", shot)
     if note:
         page.fill("#roll-note", note)
     page.click("#roll-save")
@@ -288,6 +290,52 @@ def test_roll_modal_keeps_bottombar_visible(browser, server):
     page.click("#new-roll-btn")
     page.wait_for_selector("#roll-modal:visible")
     assert page.is_visible("#bottombar")
+    page.context.close()
+
+
+def test_shot_date_defaults_to_now_and_can_be_overridden(browser, server):
+    import re
+    page = open_page(browser, viewport=MOBILE)
+    page.click("#new-roll-btn")
+    page.wait_for_selector("#roll-modal:visible")
+    # prefilled with the current local date/time
+    assert re.fullmatch(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}",
+                        page.input_value("#roll-shot"))
+    page.click("#roll-cancel")
+    page.wait_for_selector("#roll-modal", state="hidden")
+
+    create_roll(page, "Leica MP", "Kodak Portra 400", "Old Walk",
+                shot="2020-01-01T10:00")
+    create_roll(page, "Leica M6", "Ilford HP5 400", "Dune Flats",
+                shot="2024-06-01T09:00")
+    cards = page.locator("#view .card")
+    assert cards.count() == 2
+    # newest SHOT first, regardless of creation order
+    assert "2024-06-01 09:00" in cards.nth(0).inner_text()
+    assert "2020-01-01 10:00" in cards.nth(1).inner_text()
+    shot(page, "mobile-shot-dates")
+
+    # the location page shows the visit date too
+    goto_page(page, "locations")
+    assert "visited 2024-06-01 09:00" in page.inner_text("#view")
+    assert page.errors == []
+    page.context.close()
+
+
+def test_new_location_visit_date_override(browser, server):
+    page = open_page(browser, viewport=MOBILE)
+    page.click("#new-location-btn")
+    page.wait_for_selector("#loc-modal:visible")
+    import re
+    assert re.fullmatch(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}",
+                        page.input_value("#loc-shot"))
+    page.fill("#loc-name", "Quiet Pier")
+    page.fill("#loc-shot", "2019-03-03T08:30")
+    page.click("#loc-save")
+    page.wait_for_selector("#loc-modal", state="hidden")
+    page.wait_for_selector("text=Quiet Pier")
+    assert "visited 2019-03-03 08:30" in page.inner_text("#view")
+    assert page.errors == []
     page.context.close()
 
 

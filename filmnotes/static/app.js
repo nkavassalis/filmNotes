@@ -38,11 +38,14 @@ function toast(msg) {
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g,
   (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 
-const fmtDate = (iso) => {
-  if (!iso) return "";
-  const d = new Date(iso.replace(" ", "T") + (iso.endsWith("Z") ? "" : "Z"));
-  return d.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
-};
+const fmtDT = (s) => (s ? String(s).replace("T", " ") : "");
+
+/* local wall-clock now for datetime-local inputs ('YYYY-MM-DDTHH:MM') */
+function dtLocalNow() {
+  const d = new Date(), p = (n) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}` +
+         `T${p(d.getHours())}:${p(d.getMinutes())}`;
+}
 
 /* ------------------------------------------------------------- data */
 
@@ -96,7 +99,7 @@ function renderRolls(view) {
   }
   view.innerHTML = `<h1 class="page-title">Rolls</h1>` + state.rolls.map((r) => `
     <article class="card">
-      <h3>Roll #${r.id} <span class="meta">· ${fmtDate(r.created_at)}</span></h3>
+      <h3>Roll #${r.id} <span class="meta">· ${esc(fmtDT(r.shot_at))}</span></h3>
       <div class="chips">
         <span class="chip">${esc(r.camera)}</span>
         <span class="chip">${esc(r.film)}</span>
@@ -115,10 +118,10 @@ function renderLocations(view) {
   view.innerHTML = `<h1 class="page-title">Locations</h1>` + state.locations.map((l) => `
     <article class="card">
       <h3>&#128205; ${esc(l.name)}</h3>
-      <div class="meta">${l.rolls.length} roll${l.rolls.length === 1 ? "" : "s"} · added ${fmtDate(l.created_at)}</div>
+      <div class="meta">${l.rolls.length} roll${l.rolls.length === 1 ? "" : "s"} · visited ${esc(fmtDT(l.visited_at))}</div>
       ${l.note ? `<p class="note">${esc(l.note)}</p>` : ""}
       ${l.rolls.length ? `<ul class="sublist">` + l.rolls.map((r) => `
-        <li><b>Roll #${r.id}</b> <span class="meta">${fmtDate(r.created_at)} · ${esc(r.camera)} · ${esc(r.film)}</span>
+        <li><b>Roll #${r.id}</b> <span class="meta">${esc(fmtDT(r.shot_at))} · ${esc(r.camera)} · ${esc(r.film)}</span>
         ${r.note ? `<span class="meta">${esc(r.note)}</span>` : ""}</li>`).join("") + `</ul>` : ""}
     </article>`).join("");
 }
@@ -133,7 +136,7 @@ function renderCameras(view) {
     <article class="card">
       <h3>${esc(c.name)}</h3>
       <div class="meta">${c.used_count} roll${c.used_count === 1 ? "" : "s"}` +
-        (c.last_used ? ` · last used ${fmtDate(c.last_used)}` : "") + `</div>
+        (c.last_used ? ` · last used ${esc(fmtDT(c.last_used))}` : "") + `</div>
     </article>`).join("");
   $("add-camera").addEventListener("click", async () => {
     const name = $("new-camera").value.trim();
@@ -154,7 +157,7 @@ function renderFilm(view) {
     <article class="card">
       <h3>${esc(f.name)}</h3>
       <div class="meta">${f.used_count} roll${f.used_count === 1 ? "" : "s"}` +
-        (f.last_used ? ` · last used ${fmtDate(f.last_used)}` : "") + `</div>
+        (f.last_used ? ` · last used ${esc(fmtDT(f.last_used))}` : "") + `</div>
     </article>`).join("");
   $("add-film").addEventListener("click", async () => {
     const name = $("new-film").value.trim();
@@ -214,6 +217,7 @@ $("new-roll-btn").addEventListener("click", async () => {
   fillSelect($("roll-film"), mruSort(state.films));
   fillDatalist();
   $("roll-note").value = "";
+  $("roll-shot").value = dtLocalNow();
   state.lastFix = null;
   if (!$("roll-location").value.trim()) suggestLocation();
   openModal("roll-modal");
@@ -225,6 +229,7 @@ $("roll-save").addEventListener("click", async () => {
     film_id: Number($("roll-film").value),
     location_name: $("roll-location").value.trim(),
     note: $("roll-note").value.trim(),
+    shot_at: $("roll-shot").value,
   };
   if (!body.location_name) { toast("Location is required"); return; }
   if (state.lastFix) { body.lat = state.lastFix.lat; body.lon = state.lastFix.lon; }
@@ -247,10 +252,11 @@ $("new-location-btn").addEventListener("click", async () => {
     fillDatalist();
     $("loc-current").innerHTML = cur.current
       ? `Current camera: <b>${esc(cur.current.camera)}</b> · Current roll: ` +
-        `<b>#${cur.current.id}</b> (${esc(cur.current.film)}, ${fmtDate(cur.current.created_at)})`
+        `<b>#${cur.current.id}</b> (${esc(cur.current.film)}, ${esc(fmtDT(cur.current.shot_at))})`
       : `No rolls yet — the current camera and roll will appear here.`;
     $("loc-name").value = "";
     $("loc-note").value = "";
+    $("loc-shot").value = dtLocalNow();
     state.lastFix = null;
     openModal("loc-modal");
   } catch (e) { toast(e.message); }
@@ -260,6 +266,7 @@ $("loc-save").addEventListener("click", async () => {
   const body = {
     name: $("loc-name").value.trim(),
     note: $("loc-note").value.trim(),
+    visited_at: $("loc-shot").value,
   };
   if (!body.name) { toast("Location is required"); return; }
   if (state.lastFix) { body.lat = state.lastFix.lat; body.lon = state.lastFix.lon; }
