@@ -105,7 +105,10 @@ function renderRolls(view) {
         <span class="chip">${esc(r.film)}</span>
       </div>
       ${r.note ? `<p class="note">${esc(r.note)}</p>` : ""}
-      <div class="chips"><span class="chip loc">&#128205; ${esc(r.location)}</span></div>
+      ${(r.locations || []).length ? `<ul class="sublist">` + r.locations.map((l) => `
+        <li><b class="loc-name">&#128205; ${esc(l.name)}</b>
+        <span class="meta">${esc(fmtDT(l.visited_at))}</span>
+        ${l.note ? `<span class="meta">${esc(l.note)}</span>` : ""}</li>`).join("") + `</ul>` : ""}
     </article>`).join("");
 }
 
@@ -121,7 +124,7 @@ function renderLocations(view) {
       <div class="meta">${l.rolls.length} roll${l.rolls.length === 1 ? "" : "s"} · visited ${esc(fmtDT(l.visited_at))}</div>
       ${l.note ? `<p class="note">${esc(l.note)}</p>` : ""}
       ${l.rolls.length ? `<ul class="sublist">` + l.rolls.map((r) => `
-        <li><b>Roll #${r.id}</b> <span class="meta">${esc(fmtDT(r.shot_at))} · ${esc(r.camera)} · ${esc(r.film)}</span>
+        <li><b>Roll #${r.id}</b> <span class="meta">${esc(fmtDT(r.visited_at))} · ${esc(r.camera)} · ${esc(r.film)}</span>
         ${r.note ? `<span class="meta">${esc(r.note)}</span>` : ""}</li>`).join("") + `</ul>` : ""}
     </article>`).join("");
 }
@@ -256,7 +259,9 @@ $("new-location-btn").addEventListener("click", async () => {
       : `No rolls yet — the current camera and roll will appear here.`;
     $("loc-name").value = "";
     $("loc-note").value = "";
-    $("loc-shot").value = dtLocalNow();
+    /* attaching to the current roll? default the visit to its shot date */
+    $("loc-shot").value = cur.current
+      ? cur.current.shot_at.replace(" ", "T") : dtLocalNow();
     state.lastFix = null;
     openModal("loc-modal");
   } catch (e) { toast(e.message); }
@@ -271,12 +276,13 @@ $("loc-save").addEventListener("click", async () => {
   if (!body.name) { toast("Location is required"); return; }
   if (state.lastFix) { body.lat = state.lastFix.lat; body.lon = state.lastFix.lon; }
   try {
-    await api("/api/locations", { method: "POST", body });
+    const saved = await api("/api/locations", { method: "POST", body });
     closeModal("loc-modal");
     await refreshData();
     location.hash = "#/locations";
     route();
-    toast("Location saved");
+    toast(saved.attached_to_roll != null
+      ? `Location added to Roll #${saved.attached_to_roll}` : "Location saved");
   } catch (e) { toast(e.message); }
 });
 

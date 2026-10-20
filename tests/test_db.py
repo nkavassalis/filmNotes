@@ -50,9 +50,78 @@ def test_add_roll_and_listing(conn):
     roll = db.add_roll(conn, cam, film, loc["id"], "f/8 sunny")
     rolls = db.list_rolls(conn)
     assert rolls[0]["id"] == roll["id"]
-    assert rolls[0]["location"] == "Golden Gate Park"
+    assert rolls[0]["locations"][0]["name"] == "Golden Gate Park"
     assert rolls[0]["note"] == "f/8 sunny"
     assert rolls[0]["camera"] and rolls[0]["film"]
+
+
+def test_roll_accumulates_locations(conn):
+    cam = db.list_cameras(conn)[0]["id"]
+    film = db.list_films(conn)[0]["id"]
+    a = db.add_location(conn, "Ken Willhans")
+    roll = db.add_roll(conn, cam, film, a["id"], shot_at="2026-01-01 10:00")
+    b = db.add_location(conn, "Belfountain")
+    db.attach_location(conn, roll["id"], b["id"], "last 2 frames")
+    r = db.list_rolls(conn)[0]
+    names = {l["name"] for l in r["locations"]}
+    assert names == {"Ken Willhans", "Belfountain"}
+    belf = [l for l in r["locations"] if l["name"] == "Belfountain"][0]
+    assert belf["note"] == "last 2 frames"
+    assert belf["visited_at"] == "2026-01-01 10:00"  # defaults to shot date
+    # the location page lists the roll under it, with the entry note
+    locs = {l["name"]: l for l in db.list_locations(conn)}
+    assert locs["Belfountain"]["rolls"][0]["id"] == roll["id"]
+    assert locs["Belfountain"]["rolls"][0]["note"] == "last 2 frames"
+
+
+def test_attach_updates_in_place(conn):
+    cam = db.list_cameras(conn)[0]["id"]
+    film = db.list_films(conn)[0]["id"]
+    a = db.add_location(conn, "Tops")
+    roll = db.add_roll(conn, cam, film, a["id"])
+    db.attach_location(conn, roll["id"], a["id"], "first note")
+    db.attach_location(conn, roll["id"], a["id"], "")      # blank keeps note
+    r = db.list_rolls(conn)[0]
+    assert len(r["locations"]) == 1
+    assert r["locations"][0]["note"] == "first note"
+    db.attach_location(conn, roll["id"], a["id"], "new note")
+    r = db.list_rolls(conn)[0]
+    assert len(r["locations"]) == 1
+    assert r["locations"][0]["note"] == "new note"
+
+
+def test_attach_rejects_unknown_ids(conn):
+    cam = db.list_cameras(conn)[0]["id"]
+    film = db.list_films(conn)[0]["id"]
+    a = db.add_location(conn, "Nowhere")
+    roll = db.add_roll(conn, cam, film, a["id"])
+    import pytest
+    with pytest.raises(ValueError):
+        db.attach_location(conn, roll["id"], 99999)
+    with pytest.raises(ValueError):
+        db.attach_location(conn, 99999, a["id"])
+    with pytest.raises(ValueError):
+        db.add_roll(conn, cam, film, 99999)
+
+
+def test_migrate_from_single_location_schema(conn):
+    # simulate the pre-junction schema: re-add rolls.location_id with data
+    cam = db.list_cameras(conn)[0]["id"]
+    film = db.list_films(conn)[0]["id"]
+    a = db.add_location(conn, "One")
+    b = db.add_location(conn, "Two")
+    db.add_roll(conn, cam, film, a["id"], shot_at="2025-05-05 05:05")
+    conn.execute("ALTER TABLE rolls ADD COLUMN location_id INTEGER")
+    conn.execute("UPDATE rolls SET location_id = ?", (a["id"],))
+    db.init_db(conn)  # backfills the junction, drops the column
+    assert "location_id" not in [r["name"] for r in
+                                 conn.execute("PRAGMA table_info(rolls)")]
+    r = db.list_rolls(conn)[0]
+    assert r["locations"][0]["name"] == "One"
+    assert r["locations"][0]["visited_at"] == "2025-05-05 05:05"
+    locs = {l["name"]: l for l in db.list_locations(conn)}
+    assert len(locs["One"]["rolls"]) == 1
+    assert len(locs["Two"]["rolls"]) == 0
 
 
 def test_locations_page_groups_rolls(conn):

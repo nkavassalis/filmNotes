@@ -57,12 +57,19 @@ CREATE TABLE IF NOT EXISTS rolls (
   id          INTEGER PRIMARY KEY,
   camera_id   INTEGER NOT NULL REFERENCES cameras(id),
   film_id     INTEGER NOT NULL REFERENCES films(id),
-  location_id INTEGER NOT NULL REFERENCES locations(id),
   note        TEXT NOT NULL DEFAULT '',
   shot_at     TEXT NOT NULL DEFAULT '',
   created_at  TEXT NOT NULL
 );
-CREATE INDEX IF NOT EXISTS idx_rolls_location ON rolls(location_id);
+CREATE TABLE IF NOT EXISTS roll_locations (
+  roll_id     INTEGER NOT NULL REFERENCES rolls(id),
+  location_id INTEGER NOT NULL REFERENCES locations(id),
+  note        TEXT NOT NULL DEFAULT '',
+  visited_at  TEXT NOT NULL DEFAULT '',
+  PRIMARY KEY (roll_id, location_id)
+);
+CREATE INDEX IF NOT EXISTS idx_roll_locations_loc  ON roll_locations(location_id);
+CREATE INDEX IF NOT EXISTS idx_roll_locations_roll ON roll_locations(roll_id);
 CREATE INDEX IF NOT EXISTS idx_rolls_camera   ON rolls(camera_id);
 CREATE INDEX IF NOT EXISTS idx_rolls_film     ON rolls(film_id);
 """
@@ -102,6 +109,17 @@ def _migrate(conn):
         conn.execute("ALTER TABLE locations ADD COLUMN visited_at TEXT NOT NULL DEFAULT ''")
         conn.execute("UPDATE locations SET visited_at = "
                      "replace(substr(created_at, 1, 16), 'T', ' ')")
+    # v0.2: rolls.location_id -> roll_locations junction (a roll accumulates
+    # locations; New Location attaches to the current roll).
+    if "location_id" in cols("rolls"):
+        conn.execute(
+            "INSERT OR IGNORE INTO roll_locations"
+            "(roll_id, location_id, note, visited_at) "
+            "SELECT r.id, r.location_id, '', r.shot_at FROM rolls r "
+            "WHERE r.location_id IS NOT NULL "
+            "AND EXISTS (SELECT 1 FROM locations l WHERE l.id = r.location_id)")
+        conn.execute("DROP INDEX IF EXISTS idx_rolls_location")
+        conn.execute("ALTER TABLE rolls DROP COLUMN location_id")
 
 
 def init_db(conn):
@@ -193,18 +211,23 @@ def add_film(conn, name):
 # ---------------------------------------------------------------- locations
 
 def list_locations(conn):
-    """Locations newest visit first, each with its rolls (newest shot first)."""
+    """Locations newest visit first, each with its rolls (newest visit first).
+
+    The roll list comes from the roll_locations junction; rl.note is the
+    note for THAT roll at THAT place (set in the New Location popover).
+    """
     out = []
     for loc in conn.execute(
             "SELECT * FROM locations ORDER BY visited_at DESC, id DESC"):
         rolls = [dict(r) for r in conn.execute(
-            """SELECT r.id, r.note, r.shot_at,
+            """SELECT r.id, r.shot_at, rl.note, rl.visited_at,
                       c.name AS camera, f.name AS film
-               FROM rolls r
+               FROM roll_locations rl
+               JOIN rolls   r ON r.id = rl.roll_id
                JOIN cameras c ON c.id = r.camera_id
                JOIN films   f ON f.id = r.film_id
-               WHERE r.location_id = ?
-               ORDER BY r.shot_at DESC, r.id DESC""",
+               WHERE rl.location_id = ?
+               ORDER BY rl.visited_at DESC, r.id DESC""",
             (loc["id"],))]
         d = dict(loc)
         d["rolls"] = rolls
@@ -241,35 +264,93 @@ def get_or_create_location(conn, name, lat=None, lon=None, visited_at=None):
 
 
 def touch_location_visit(conn, location_id, visited_at):
-    """A roll shot there refreshes the visit date (used by add_roll path)."""
+    """A visit refreshes the location's date (only ever moves forward)."""
     conn.execute("UPDATE locations SET visited_at=? WHERE id=? AND visited_at<=?",
                  (visited_at, location_id, visited_at))
+
+
+def set_location_note(conn, location_id, note):
+    """Standalone location note (only when the location has no note yet)."""
+    if note:
+        conn.execute("UPDATE locations SET note=? WHERE id=? AND note=''",
+                     (note, location_id))
+
+
+def attach_location(conn, roll_id, location_id, note="", visited_at=None):
+    """Link a location to a roll (the New Location popover path).
+
+    Re-adding the same place to the same roll updates the entry instead of
+    duplicating it; a blank note never erases an existing one. visited_at
+    defaults to the roll's shot date.
+    """
+    roll = conn.execute("SELECT shot_at FROM rolls WHERE id=?",
+                        (roll_id,)).fetchone()
+    if roll is None:
+        raise ValueError("unknown roll_id")
+    if conn.execute("SELECT 1 FROM locations WHERE id=?",
+                    (location_id,)).fetchone() is None:
+        raise ValueError("unknown location_id")
+    visited = visited_at or roll["shot_at"] or now_local()
+    conn.execute(
+        "INSERT INTO roll_locations(roll_id, location_id, note, visited_at) "
+        "VALUES (?,?,?,?) "
+        "ON CONFLICT(roll_id, location_id) DO UPDATE SET "
+        "note=CASE WHEN excluded.note != '' THEN excluded.note ELSE note END, "
+        "visited_at=excluded.visited_at",
+        (roll_id, location_id, note, visited))
+    touch_location_visit(conn, location_id, visited)
+    conn.commit()
 
 
 # ---------------------------------------------------------------- rolls
 
 def list_rolls(conn):
-    """Rolls newest shot first, with camera/film/location names."""
-    return [dict(r) for r in conn.execute(
-        """SELECT r.id, r.note, r.shot_at, r.created_at, r.location_id,
-                  c.name AS camera, f.name AS film, l.name AS location
+    """Rolls newest shot first, each with its locations (newest visit first).
+
+    Each roll carries a locations list: {id, name, note, visited_at} where
+    note is the roll-at-that-place note.
+    """
+    rolls = [dict(r) for r in conn.execute(
+        """SELECT r.id, r.note, r.shot_at, r.created_at,
+                  c.name AS camera, f.name AS film
            FROM rolls r
-           JOIN cameras   c ON c.id = r.camera_id
-           JOIN films     f ON f.id = r.film_id
-           JOIN locations l ON l.id = r.location_id
+           JOIN cameras c ON c.id = r.camera_id
+           JOIN films   f ON f.id = r.film_id
            ORDER BY r.shot_at DESC, r.id DESC""")]
+    for r in rolls:
+        r["locations"] = [dict(x) for x in conn.execute(
+            """SELECT l.id, l.name, rl.note, rl.visited_at
+               FROM roll_locations rl
+               JOIN locations l ON l.id = rl.location_id
+               WHERE rl.roll_id = ?
+               ORDER BY rl.visited_at DESC, l.name""", (r["id"],))]
+    return rolls
 
 
 def add_roll(conn, camera_id, film_id, location_id, note="", shot_at=None):
+    """Create a roll and link its first location (New Roll popover)."""
     shot_at = shot_at or now_local()
+    if conn.execute("SELECT 1 FROM locations WHERE id=?",
+                    (location_id,)).fetchone() is None:
+        raise ValueError("unknown location_id")
     cur = conn.execute(
-        "INSERT INTO rolls(camera_id, film_id, location_id, note, shot_at, "
-        "created_at) VALUES (?,?,?,?,?,?)",
-        (camera_id, film_id, location_id, note, shot_at, now()))
+        "INSERT INTO rolls(camera_id, film_id, note, shot_at, created_at) "
+        "VALUES (?,?,?,?,?)",
+        (camera_id, film_id, note, shot_at, now()))
+    roll_id = cur.lastrowid
+    conn.execute(
+        "INSERT INTO roll_locations(roll_id, location_id, note, visited_at) "
+        "VALUES (?,?,?,?)", (roll_id, location_id, "", shot_at))
     touch_location_visit(conn, location_id, shot_at)
     conn.commit()
-    return dict(conn.execute("SELECT * FROM rolls WHERE id=?",
-                             (cur.lastrowid,)).fetchone())
+    roll = dict(conn.execute("SELECT * FROM rolls WHERE id=?",
+                             (roll_id,)).fetchone())
+    roll["locations"] = [dict(conn.execute(
+        "SELECT l.id, l.name, rl.note, rl.visited_at "
+        "FROM roll_locations rl JOIN locations l ON l.id = rl.location_id "
+        "WHERE rl.roll_id=? AND rl.location_id=?",
+        (roll_id, location_id)).fetchone())]
+    return roll
 
 
 def current_roll(conn):

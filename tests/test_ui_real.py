@@ -399,8 +399,51 @@ def test_new_location_shows_readonly_current_roll(browser, server):
     page.wait_for_selector("#loc-modal", state="hidden")
     page.wait_for_selector("text=Secret Cove")
     body = page.inner_text("#view")
-    assert "Secret Cove" in body and "low tide only" in body
-    assert "0 rolls" in body
+    assert "Secret Cove" in body
+    # attached to the current roll: it shows 1 roll, with the entry note
+    assert "1 roll" in body and "low tide only" in body
+    assert "Roll #1" in body
+    assert page.errors == []
+    page.context.close()
+
+
+def test_user_scenario_roll_accumulates_locations(browser, server):
+    """Regression for the reported confusion: a location added via New
+    Location belongs to the current roll (not a 0-roll island), and a
+    second roll prefilled with that location lists under it too."""
+    page = open_page(browser, viewport=MOBILE)
+    create_roll(page, "Pentax 67", "Ilford HP5 400",
+                "Ken Willhans Conservation Area", shot="2026-01-01T10:16")
+    # add a second location to the SAME roll
+    page.click("#new-location-btn")
+    page.wait_for_selector("#loc-modal:visible")
+    page.fill("#loc-name", "Belfountain Conservation Area")
+    page.fill("#loc-note", "last 2 frames")
+    page.click("#loc-save")
+    page.wait_for_selector("#loc-modal", state="hidden")
+    page.wait_for_selector("text=Belfountain Conservation Area")
+    loc_body = page.inner_text("#view")
+    assert "1 roll" in loc_body and "last 2 frames" in loc_body
+    # the roll card lists BOTH locations under it
+    goto_page(page, "rolls")
+    roll_card = page.locator("#view .card").first.inner_text()
+    assert "Ken Willhans" in roll_card and "Belfountain" in roll_card
+    assert "last 2 frames" in roll_card
+    # new roll prefills the most recent location (user wants this)
+    page.click("#new-roll-btn")
+    page.wait_for_selector("#roll-modal:visible")
+    assert page.input_value("#roll-location") == \
+        "Belfountain Conservation Area"
+    page.select_option("#roll-camera", label="Leica MP")
+    page.select_option("#roll-film", label="Kodak Portra 400")
+    page.click("#roll-save")
+    page.wait_for_selector("#roll-modal", state="hidden")
+    # Belfountain now lists BOTH rolls, newest visit first
+    goto_page(page, "locations")
+    belf = page.locator(".card", has_text="Belfountain").first
+    assert "2 rolls" in belf.inner_text()
+    assert "Roll #2" in belf.inner_text() and "Roll #1" in belf.inner_text()
+    shot(page, "mobile-roll-accumulates")
     assert page.errors == []
     page.context.close()
 

@@ -22,7 +22,8 @@ filmnotes/
   db.py                    ALL SQL lives here. Schema, additive _migrate,
                            seeds (SEED_CAMERAS, SEED_FILMS), settings key/value,
                            list_* rows carry used_count + last_used for MRU
-                           sorting. shot_at/visited_at are the sort keys.
+                           sorting. roll_locations is the roll<->location
+                           junction (note + visited_at live on the entry).
   web.py                   create_app(db_path). Thin routes, no SQL.
                            _body()/_str()/_note()/_num() input hygiene;
                            /api/* errors are ALWAYS JSON, never HTML 500.
@@ -68,6 +69,17 @@ the ui tier fails with "Executable doesn't exist" and you must
 - **Flask + SQLite (WAL) + vanilla JS, no build step** — matches rssgate,
   which the user runs on their tailnet. One process, one file of JS, one
   stylesheet.
+- **Rolls accumulate locations (many-to-many)** via `roll_locations(roll_id,
+  location_id, note, visited_at)`. This is the user's mental model and the
+  original spec ("rolls with EACH location under it"): **New Location
+  attaches the place to the CURRENT roll** (the one the popover shows).
+  The note the user types is the note for THAT roll at THAT place (lives
+  on the junction row, not on `locations.note`). `attach_location` is an
+  upsert: re-adding updates the entry, a blank note never erases an
+  existing one, visited_at defaults to the roll's shot date. With no rolls
+  at all, New Location creates a standalone place and the note falls back
+  to `locations.note`. `add_roll` links the roll's first location. The old
+  `rolls.location_id` column is migrated away (backfill + drop).
 - **Shot/visit dates are local naive strings** `"YYYY-MM-DD HH:MM"` (what
   `datetime-local` gives you, T normalized to a space). Fixed width, so
   plain string sort orders them; the user's wall-clock time is the point,
@@ -127,10 +139,13 @@ the ui tier fails with "Executable doesn't exist" and you must
 ## Invariants (test-enforced unless noted)
 
 1. Seeds: 6 cameras, 15 films, re-running init_db never duplicates.
-2. `GET /api/rolls` rows carry camera/film/location NAMES (roll page shows
-   location under the roll); `GET /api/locations` nests rolls per location.
-   Both pages sort by the user-visible date (shot_at / visited_at) newest
-   first, `id DESC` as tiebreak — never by created_at or id alone.
+2. `GET /api/rolls` rows carry camera/film NAMES plus a `locations` list
+   ({id, name, note, visited_at}); `GET /api/locations` nests a `rolls`
+   list per location (with the per-entry note). Both pages sort by the
+   user-visible date (shot_at / visited_at) newest first, `id DESC` as
+   tiebreak — never by created_at or id alone. A location added via New
+   Location must appear under the current roll immediately (never as a
+   0-roll island when a current roll exists).
 3. POST /api/rolls requires valid camera_id + film_id (ints) and either
    location_id or a non-empty location_name; bad input => 400 JSON.
 4. lat/lon arrive together, in range; theme is only auto|light|dark;
@@ -148,7 +163,8 @@ the ui tier fails with "Executable doesn't exist" and you must
 
 ## Known issues / TODOs
 
-- Rolls/locations/cameras/films are create-only; no edit/delete yet.
+- Rolls/locations/cameras/films are create-only; no edit/delete yet —
+  notably no way to unlink a location from a roll or delete a location.
 - No auth: relies on the WireGuard/Tailscale perimeter (by design).
 - Nominatim is the only geocoder; no offline place names (see unverified).
 - Camera/film rename would orphan usage stats (no update path at all yet).

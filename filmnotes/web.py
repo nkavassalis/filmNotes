@@ -140,7 +140,6 @@ def create_app(db_path, conn=None):
                 conn, name, _num(data, "lat"), _num(data, "lon"), shot_at)
         roll = db.add_roll(conn, data["camera_id"], data["film_id"],
                            loc["id"], note, shot_at)
-        roll["location"] = loc["name"]
         return jsonify(roll), 201
 
     # ------------------------------------------------------------ locations
@@ -155,6 +154,10 @@ def create_app(db_path, conn=None):
 
     @app.post("/api/locations")
     def api_new_location():
+        """Create/find a place and ATTACH it to the current roll (the one
+        the popover shows). With no rolls yet it stays standalone and the
+        note lands on the location itself.
+        """
         data = _body()
         name = _str(data, "name", required=True)
         note = _note(data)
@@ -162,8 +165,18 @@ def create_app(db_path, conn=None):
         lat, lon = _num(data, "lat"), _num(data, "lon")
         if (lat is None) != (lon is None):
             raise BadRequest("lat and lon must come together")
-        return jsonify(db.add_location(conn, name, note, lat, lon,
-                                       visited_at)), 201
+        loc = db.get_or_create_location(conn, name, lat, lon, visited_at)
+        cur = db.current_roll(conn)
+        attached = None
+        if cur is not None:
+            db.attach_location(conn, cur["id"], loc["id"], note, visited_at)
+            attached = cur["id"]
+        else:
+            db.set_location_note(conn, loc["id"], note)
+            conn.commit()
+        loc = dict(db.get_location(conn, loc["id"]))
+        loc["attached_to_roll"] = attached
+        return jsonify(loc), 201
 
     # ------------------------------------------------------------ cameras
 

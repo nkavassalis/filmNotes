@@ -53,11 +53,11 @@ def test_new_roll_flow(client):
         "location_name": "Big Sur", "note": "golden hour"})
     assert resp.status_code == 201
     roll = get_json(resp)
-    assert roll["location"] == "Big Sur"
+    assert roll["locations"][0]["name"] == "Big Sur"
     rolls = get_json(client.get("/api/rolls"))
     assert rolls[0]["id"] == roll["id"]
     assert rolls[0]["camera"] == cam["name"]
-    # the location was created implicitly and appears on the Locations page
+    # the location was created implicitly, linked, and appears on Locations
     locs = get_json(client.get("/api/locations"))
     assert locs[0]["name"] == "Big Sur"
     assert locs[0]["rolls"][0]["id"] == roll["id"]
@@ -96,7 +96,7 @@ def test_new_roll_by_location_id(client):
     r = client.post("/api/rolls", json={"camera_id": 2, "film_id": 3,
                                         "location_id": loc["id"]})
     assert r.status_code == 201
-    assert get_json(r)["location"] == "Stinson Beach"
+    assert get_json(r)["locations"][0]["name"] == "Stinson Beach"
 
 
 def test_new_location(client):
@@ -106,12 +106,48 @@ def test_new_location(client):
     assert r.status_code == 201
     loc = get_json(r)
     assert loc["note"] == "low tide only" and loc["lat"] == 37.56
+    assert loc["attached_to_roll"] is None      # no rolls yet -> standalone
     r = client.post("/api/locations", json={"name": ""})
     assert r.status_code == 400
     r = client.post("/api/locations", json={"name": "x", "lat": 37.5})
     assert r.status_code == 400          # lat without lon
     r = client.post("/api/locations", json={"name": "x", "lat": 999, "lon": 0})
     assert r.status_code == 400          # out of range
+
+
+def test_new_location_attaches_to_current_roll(client):
+    # the regression that started it all: adding a location to the CURRENT
+    # roll must show it under that roll immediately, not as a 0-roll island
+    client.post("/api/rolls", json={"camera_id": 1, "film_id": 1,
+                                    "location_name": "Ken Willhans",
+                                    "shot_at": "2026-01-01 10:16"})
+    r = client.post("/api/locations", json={"name": "Belfountain",
+                                            "note": "last 2 frames"})
+    loc = get_json(r)
+    assert loc["attached_to_roll"] == 1
+    locs = {l["name"]: l for l in get_json(client.get("/api/locations"))}
+    assert len(locs["Belfountain"]["rolls"]) == 1
+    entry = locs["Belfountain"]["rolls"][0]
+    assert entry["id"] == 1 and entry["note"] == "last 2 frames"
+    assert entry["visited_at"] == "2026-01-01 10:16"  # inherits the shot date
+    rolls = get_json(client.get("/api/rolls"))
+    assert {l["name"] for l in rolls[0]["locations"]} == \
+        {"Ken Willhans", "Belfountain"}
+    # re-adding the same place does not duplicate the entry
+    client.post("/api/locations", json={"name": "belfountain",
+                                        "note": "gate locked"})
+    locs = {l["name"]: l for l in get_json(client.get("/api/locations"))}
+    assert len(locs["Belfountain"]["rolls"]) == 1
+    assert locs["Belfountain"]["rolls"][0]["note"] == "gate locked"
+
+
+def test_second_roll_at_same_location_lists_both_rolls(client):
+    base = {"camera_id": 1, "film_id": 1, "location_name": "Pier"}
+    client.post("/api/rolls", json={**base, "shot_at": "2026-01-01 10:00"})
+    client.post("/api/rolls", json={**base, "shot_at": "2026-01-02 11:00"})
+    locs = {l["name"]: l for l in get_json(client.get("/api/locations"))}
+    assert len(locs["Pier"]["rolls"]) == 2
+    assert locs["Pier"]["rolls"][0]["visited_at"] == "2026-01-02 11:00"
 
 
 def test_current_roll_endpoint(client):
