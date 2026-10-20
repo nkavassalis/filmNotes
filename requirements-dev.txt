@@ -1,0 +1,4 @@
+# dev/test extras (app itself needs only requirements.txt)
+pytest>=8.0
+playwright>=1.45
+pillow>=10.0

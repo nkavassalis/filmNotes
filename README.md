@@ -1,0 +1,96 @@
+# filmNotes
+
+A field notebook for film photographers. Log rolls and locations as fast
+as you can load film: pick a camera and a film, name the place (or let
+your phone figure it out), jot a note, done. Works on desktop and phone,
+installs to the home screen, and keeps everything on your own server.
+
+## What it does
+
+- **Rolls** — every roll you log: camera, film, location, optional note,
+  newest first. The location sits under each roll.
+- **Locations** — every place you've shot, with its rolls listed under it.
+- **Cameras / Film** — the gear lists that feed the New Roll dropdowns.
+  Seeded with the usual suspects (Leica MP/M6, Canon 1V, Pentax 67/645N2,
+  Bronica SQ-A; Portra, Delta, HP5, Tri-X, T-Max, Velvia, Provia, Acros,
+  XP2...). Add your own from the page. Dropdowns sort **most recently
+  used first**.
+- **New Roll** (bottom bar) — popover with Camera and Film dropdowns, a
+  Location field with a friendly name derived from the device location
+  service (tap the crosshair to detect; the field is always editable so
+  you can override with your own name), and an optional note. Typing a
+  brand-new place name creates the location for you.
+- **New Location** (bottom bar) — popover with the same location field +
+  note. It also shows the current camera and current roll as read-only
+  context.
+- **Settings** (cog, top right) — UI theme: Auto (follows the system),
+  Light, or Dark. Stored server-side, so every device you use agrees.
+- **Pages drawer** — hamburger (top left) or swipe from the left edge
+  exposes Rolls / Locations / Cameras / Film.
+- **Bottom bar** — New Roll and New Location, pinned across every screen.
+  It hides only while the settings popover is up.
+
+## Install
+
+Python 3.11+:
+
+```
+python3 -m venv .venv
+.venv/bin/pip install -r requirements.txt
+.venv/bin/python run.py            # http://127.0.0.1:8961
+```
+
+First boot creates the SQLite database (`data/filmnotes.sqlite`) and seeds
+the camera and film lists. Options: `--host`, `--port`, `--db PATH`,
+`--config config.yaml` (keys: `server.host`, `server.port`,
+`server.data_dir`).
+
+## Home-screen app over WireGuard / Tailscale
+
+filmNotes is built to live on your phone's home screen, served privately
+from your own machine — no public exposure, no accounts.
+
+1. Run it on a machine inside your WireGuard/Tailscale network
+   (`--host 0.0.0.0` or `server.host: 0.0.0.0` in `config.yaml`).
+2. Put TLS in front (e.g. `tailscale serve --bg 8961`, or your usual
+   wireguard + reverse-proxy + certificate setup) and open the HTTPS URL
+   on your phone.
+3. iOS: **Share → Add to Home Screen**. Chrome/Edge on desktop: the
+   address-bar **Install app** icon. It launches standalone — no browser
+   chrome, its own icon, safe-area-aware top and bottom bars.
+
+Serve it over plain HTTP and everything works except the crosshair: iOS
+only exposes geolocation in secure contexts, so use HTTPS on the phone if
+you want location detection. The Nominatim reverse-geocode call runs from
+the *browser* (your phone), not the server, so the server itself needs no
+outbound access. If the phone can't reach nominatim.openstreetmap.org the
+field falls back to raw coordinates — you can always type the name.
+
+## Running the tests
+
+```
+.venv/bin/pip install -r requirements-dev.txt
+.venv/bin/python -m pytest              # hermetic: db + api + UI contract
+.venv/bin/python -m pytest -m ui        # real browser (Playwright + Chromium)
+```
+
+The `-m ui` tier boots the actual app against a throwaway database and
+drives headless Chromium: computed styles, element geometry, touch
+gestures, geolocation (stubbed), console-error capture. Screenshots land
+in `tests/screenshots/`. It expects port 8961 to be free.
+
+## Layout
+
+```
+run.py                    entry point (config -> db -> flask)
+filmnotes/
+  db.py                   ALL SQL: schema, seeds, queries
+  web.py                  Flask app, thin routes, JSON-only errors
+  templates/index.html    single page
+  static/app.js           routing, rendering, popovers, location service
+  static/style.css        CSS variables; light/dark/auto
+  static/manifest.webmanifest, icons
+tests/                    hermetic + Playwright tiers (see docs below)
+```
+
+See `AGENTS.md` for the working-on-it guide.

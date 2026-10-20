@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="en" data-theme="{{ 'light' if settings.theme == 'light' else ('dark' if settings.theme == 'dark' else '') }}">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>filmNotes</title>
+<link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
+<link rel="apple-touch-icon" href="/static/apple-touch-icon.png">
+<link rel="manifest" href="/static/manifest.webmanifest">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#141312">
+<link rel="stylesheet" href="/static/style.css?v={{ app_version }}">
+</head>
+<body>
+
+<header class="topbar">
+  <button id="menu-btn" class="icon-btn" aria-label="Pages">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18M3 12h18M3 18h18"/></svg>
+  </button>
+  <span class="brand">film<span>Notes</span></span>
+  <span class="spacer"></span>
+  <button id="settings-btn" class="icon-btn" aria-label="Settings">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3.2"/><path d="M12 2.8v3M12 18.2v3M2.8 12h3M18.2 12h3M5.5 5.5l2.1 2.1M16.4 16.4l2.1 2.1M18.5 5.5l-2.1 2.1M7.6 16.4l-2.1 2.1"/></svg>
+  </button>
+</header>
+
+<aside id="drawer" aria-label="Pages">
+  <div class="drawer-head">Pages</div>
+  <nav id="drawer-nav">
+    <button class="drawer-item" data-page="rolls">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="6" width="18" height="12" rx="2"/><path d="M7 6V4M11 6V4M15 6V4M19 6V4"/></svg>
+      Rolls</button>
+    <button class="drawer-item" data-page="locations">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21s-7-5.7-7-11a7 7 0 1 1 14 0c0 5.3-7 11-7 11z"/><circle cx="12" cy="10" r="2.5"/></svg>
+      Locations</button>
+    <button class="drawer-item" data-page="cameras">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="2.5" y="7" width="19" height="13" rx="2"/><path d="M8 7l1.5-3h5L16 7"/><circle cx="12" cy="13.5" r="3.5"/></svg>
+      Cameras</button>
+    <button class="drawer-item" data-page="film">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 8h18M3 16h18M7 4v16M17 4v16"/></svg>
+      Film</button>
+  </nav>
+</aside>
+<div id="veil" hidden></div>
+
+<main id="view" aria-live="polite"></main>
+
+<nav id="bottombar">
+  <button id="new-roll-btn" class="bar-tab">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="6" width="18" height="12" rx="2"/><path d="M7 6V4M11 6V4M15 6V4M19 6V4"/></svg>
+    <span>New Roll</span>
+  </button>
+  <button id="new-location-btn" class="bar-tab">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21s-7-5.7-7-11a7 7 0 1 1 14 0c0 5.3-7 11-7 11z"/><circle cx="12" cy="10" r="2.5"/></svg>
+    <span>New Location</span>
+  </button>
+</nav>
+
+<!-- Overlays ship hidden; [hidden]{display:none!important} is load-bearing. -->
+<section id="roll-modal" class="modal" hidden aria-label="New roll">
+  <div class="modal-card">
+    <h2>New Roll</h2>
+    <label for="roll-camera">Camera</label>
+    <select id="roll-camera"></select>
+    <label for="roll-film">Film type</label>
+    <select id="roll-film"></select>
+    <label for="roll-location">Location</label>
+    <div class="field-row">
+      <input id="roll-location" list="location-list" placeholder="Where was this shot?" autocomplete="off">
+      <button id="roll-detect" class="btn ghost icon" title="Detect my location" aria-label="Detect my location">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8z"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg>
+      </button>
+    </div>
+    <datalist id="location-list"></datalist>
+    <label for="roll-note">Note <span class="opt">(optional)</span></label>
+    <textarea id="roll-note" rows="3" placeholder="Aperture, light, subject..."></textarea>
+    <div class="modal-actions">
+      <button id="roll-cancel" class="btn ghost">Cancel</button>
+      <button id="roll-save" class="btn primary">Save roll</button>
+    </div>
+  </div>
+</section>
+
+<section id="loc-modal" class="modal" hidden aria-label="New location">
+  <div class="modal-card">
+    <h2>New Location</h2>
+    <div id="loc-current" class="readonly-note"></div>
+    <label for="loc-name">Location</label>
+    <div class="field-row">
+      <input id="loc-name" list="location-list" placeholder="Friendly place name" autocomplete="off">
+      <button id="loc-detect" class="btn ghost icon" title="Detect my location" aria-label="Detect my location">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8z"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg>
+      </button>
+    </div>
+    <label for="loc-note">Note <span class="opt">(optional)</span></label>
+    <textarea id="loc-note" rows="3" placeholder="Anything about this place..."></textarea>
+    <div class="modal-actions">
+      <button id="loc-cancel" class="btn ghost">Cancel</button>
+      <button id="loc-save" class="btn primary">Save location</button>
+    </div>
+  </div>
+</section>
+
+<section id="settings-modal" class="modal" hidden aria-label="Settings">
+  <div class="modal-card">
+    <h2>Settings</h2>
+    <label>Appearance</label>
+    <div class="seg" id="theme-seg" role="radiogroup">
+      <button id="theme-auto" role="radio">Auto</button>
+      <button id="theme-light" role="radio">Light</button>
+      <button id="theme-dark" role="radio">Dark</button>
+    </div>
+    <div class="modal-actions">
+      <button id="settings-close" class="btn primary">Done</button>
+    </div>
+  </div>
+</section>
+
+<div id="toast" hidden></div>
+
+<script src="/static/app.js?v={{ app_version }}"></script>
+</body>
+</html>
