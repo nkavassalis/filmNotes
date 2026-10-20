@@ -229,7 +229,7 @@ def goto_page(page, name):
     page.wait_for_selector(f"h1.page-title:has-text('{name.capitalize()}')")
 
 
-def create_roll(page, camera, film, location, note="", shot=None):
+def create_roll(page, camera, film, location, note="", shot=None, count=1):
     page.click("#new-roll-btn")
     page.wait_for_selector("#roll-modal:visible")
     page.select_option("#roll-camera", label=camera)
@@ -241,6 +241,9 @@ def create_roll(page, camera, film, location, note="", shot=None):
         page.fill("#roll-note", note)
     page.click("#roll-save")
     page.wait_for_selector("#roll-modal", state="hidden")
+    # the list re-renders after the modal closes; wait for our card
+    page.wait_for_function(
+        f"document.querySelectorAll('#view .card').length >= {count}")
 
 
 def test_new_roll_flow_and_mru_sorting(browser, server):
@@ -270,7 +273,7 @@ def test_new_roll_flow_and_mru_sorting(browser, server):
     page.click("#roll-cancel")
 
     # second roll, same location -> still one location card
-    create_roll(page, "Leica MP", "Kodak Portra 400", "mori point")
+    create_roll(page, "Leica MP", "Kodak Portra 400", "mori point", count=2)
     goto_page(page, "locations")
     mori = page.locator(".card", has_text="Mori Point")
     assert mori.count() == 1
@@ -305,9 +308,9 @@ def test_shot_date_defaults_to_now_and_can_be_overridden(browser, server):
     page.wait_for_selector("#roll-modal", state="hidden")
 
     create_roll(page, "Leica MP", "Kodak Portra 400", "Old Walk",
-                shot="2020-01-01T10:00")
+                shot="2020-01-01T10:00", count=1)
     create_roll(page, "Leica M6", "Ilford HP5 400", "Dune Flats",
-                shot="2024-06-01T09:00")
+                shot="2024-06-01T09:00", count=2)
     cards = page.locator("#view .card")
     assert cards.count() == 2
     # newest SHOT first; times hidden by default (setting)
@@ -393,6 +396,7 @@ def test_edit_roll_via_pencil(browser, server):
     page.fill("#roll-note", "fixed: Delta, not Portra")
     page.click("#roll-save")
     page.wait_for_selector("#roll-modal", state="hidden")
+    page.wait_for_selector("text=Ilford Delta 100")
     body = page.inner_text("#view")
     assert "Ilford Delta 100" in body and "Kodak Portra 400" not in body
     assert "fixed: Delta, not Portra" in body
@@ -411,6 +415,7 @@ def test_edit_location_and_entry_via_pencils(browser, server):
     page.fill("#loc-name", "Cedars Sink")
     page.click("#loc-save")
     page.wait_for_selector("#loc-modal", state="hidden")
+    page.wait_for_selector("text=Cedars Sink")
     assert "Cedars Sink" in page.inner_text("#view")
     # edit the per-roll location entry (note on the roll-at-place row)
     goto_page(page, "rolls")
@@ -419,6 +424,7 @@ def test_edit_location_and_entry_via_pencils(browser, server):
     page.fill("#entry-note", "last 2 frames")
     page.click("#entry-save")
     page.wait_for_selector("#entry-modal", state="hidden")
+    page.wait_for_selector("text=last 2 frames")
     assert "last 2 frames" in page.inner_text("#view")
     assert page.errors == []
     page.context.close()
