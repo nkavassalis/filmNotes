@@ -13,7 +13,8 @@
 
 const $ = (id) => document.getElementById(id);
 const state = { rolls: [], locations: [], cameras: [], films: [], theme: "auto",
-                lastFix: null };
+                show_times: false, lastFix: null };
+let edit = null;   // {kind: 'roll'|'loc'|'entry', ...} while an edit modal is open
 
 async function api(path, opts = {}) {
   const res = await fetch(path, {
@@ -38,7 +39,17 @@ function toast(msg) {
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g,
   (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 
-const fmtDT = (s) => (s ? String(s).replace("T", " ") : "");
+const fmtDT = (s) => {
+  if (!s) return "";
+  s = String(s).replace("T", " ");
+  return state.show_times ? s : s.split(" ")[0];
+};
+
+/* Google Maps: coordinates when the backend has them, else a name query */
+const mapUrl = (loc) =>
+  (loc.lat != null && loc.lon != null)
+    ? `https://www.google.com/maps/search/?api=1&query=${loc.lat},${loc.lon}`
+    : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(loc.name)}`;
 
 /* local wall-clock now for datetime-local inputs ('YYYY-MM-DDTHH:MM') */
 function dtLocalNow() {
@@ -99,6 +110,10 @@ function renderRolls(view) {
   }
   view.innerHTML = `<h1 class="page-title">Rolls</h1>` + state.rolls.map((r) => `
     <article class="card">
+      <button class="card-edit" data-act="edit-roll" data-id="${r.id}"
+              aria-label="Edit roll" title="Edit roll">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h4L20 8l-4-4L4 16v4z"/><path d="M13.5 6.5l4 4"/></svg>
+      </button>
       <h3>Roll #${r.id} <span class="meta">· ${esc(fmtDT(r.shot_at))}</span></h3>
       <div class="chips">
         <span class="chip">${esc(r.camera)}</span>
@@ -106,9 +121,14 @@ function renderRolls(view) {
       </div>
       ${r.note ? `<p class="note">${esc(r.note)}</p>` : ""}
       ${(r.locations || []).length ? `<ul class="sublist">` + r.locations.map((l) => `
-        <li><b class="loc-name">&#128205; ${esc(l.name)}</b>
-        <span class="meta">${esc(fmtDT(l.visited_at))}</span>
-        ${l.note ? `<span class="meta">${esc(l.note)}</span>` : ""}</li>`).join("") + `</ul>` : ""}
+        <li class="entry-row">
+          <button class="entry-edit" data-act="edit-entry" data-roll="${r.id}" data-loc="${l.id}"
+                  aria-label="Edit location entry" title="Edit this location">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h4L20 8l-4-4L4 16v4z"/><path d="M13.5 6.5l4 4"/></svg>
+          </button>
+          <b><a class="loc-link" href="${mapUrl(l)}" target="_blank" rel="noopener">&#128205; ${esc(l.name)}</a></b>
+          <span class="meta">${esc(fmtDT(l.visited_at))}</span>
+          ${l.note ? `<span class="meta">${esc(l.note)}</span>` : ""}</li>`).join("") + `</ul>` : ""}
     </article>`).join("");
 }
 
@@ -120,7 +140,11 @@ function renderLocations(view) {
   }
   view.innerHTML = `<h1 class="page-title">Locations</h1>` + state.locations.map((l) => `
     <article class="card">
-      <h3>&#128205; ${esc(l.name)}</h3>
+      <button class="card-edit" data-act="edit-loc" data-id="${l.id}"
+              aria-label="Edit location" title="Edit location">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h4L20 8l-4-4L4 16v4z"/><path d="M13.5 6.5l4 4"/></svg>
+      </button>
+      <h3><a class="loc-link" href="${mapUrl(l)}" target="_blank" rel="noopener">&#128205; ${esc(l.name)}</a></h3>
       <div class="meta">${l.rolls.length} roll${l.rolls.length === 1 ? "" : "s"} · visited ${esc(fmtDT(l.visited_at))}</div>
       ${l.note ? `<p class="note">${esc(l.note)}</p>` : ""}
       ${l.rolls.length ? `<ul class="sublist">` + l.rolls.map((r) => `
@@ -213,7 +237,14 @@ function closeModal(id) {
   if (id === "settings-modal") document.body.classList.remove("settings-open");
 }
 
-/* New Roll */
+/* New Roll (create or edit) */
+function resetRollModal(mode) {
+  edit = mode === "edit" ? edit : null;
+  $("roll-title").textContent = mode === "edit" ? "Edit Roll" : "New Roll";
+  $("roll-save").textContent = mode === "edit" ? "Save changes" : "Save roll";
+  $("roll-loc-group").hidden = mode === "edit";
+}
+
 $("new-roll-btn").addEventListener("click", async () => {
   try { await refreshData(); } catch (e) { toast(e.message); return; }
   fillSelect($("roll-camera"), mruSort(state.cameras));
@@ -223,20 +254,47 @@ $("new-roll-btn").addEventListener("click", async () => {
   $("roll-shot").value = dtLocalNow();
   state.lastFix = null;
   if (!$("roll-location").value.trim()) suggestLocation();
+  resetRollModal("new");
   openModal("roll-modal");
 });
+
+function openRollEdit(roll) {
+  fillSelect($("roll-camera"), mruSort(state.cameras));
+  fillSelect($("roll-film"), mruSort(state.films));
+  const cam = state.cameras.find((c) => c.name === roll.camera);
+  const film = state.films.find((f) => f.name === roll.film);
+  if (cam) $("roll-camera").value = String(cam.id);
+  if (film) $("roll-film").value = String(film.id);
+  $("roll-shot").value = (roll.shot_at || "").replace(" ", "T");
+  $("roll-note").value = roll.note || "";
+  edit = { kind: "roll", id: roll.id };
+  resetRollModal("edit");
+  openModal("roll-modal");
+}
+
 $("roll-cancel").addEventListener("click", () => closeModal("roll-modal"));
 $("roll-save").addEventListener("click", async () => {
-  const body = {
-    camera_id: Number($("roll-camera").value),
-    film_id: Number($("roll-film").value),
-    location_name: $("roll-location").value.trim(),
-    note: $("roll-note").value.trim(),
-    shot_at: $("roll-shot").value,
-  };
-  if (!body.location_name) { toast("Location is required"); return; }
-  if (state.lastFix) { body.lat = state.lastFix.lat; body.lon = state.lastFix.lon; }
   try {
+    if (edit && edit.kind === "roll") {
+      await api(`/api/rolls/${edit.id}`, { method: "PUT", body: {
+        camera_id: Number($("roll-camera").value),
+        film_id: Number($("roll-film").value),
+        shot_at: $("roll-shot").value,
+        note: $("roll-note").value.trim(),
+      }});
+      closeModal("roll-modal");
+      await refreshData(); route(); toast("Roll updated");
+      return;
+    }
+    const body = {
+      camera_id: Number($("roll-camera").value),
+      film_id: Number($("roll-film").value),
+      location_name: $("roll-location").value.trim(),
+      note: $("roll-note").value.trim(),
+      shot_at: $("roll-shot").value,
+    };
+    if (!body.location_name) { toast("Location is required"); return; }
+    if (state.lastFix) { body.lat = state.lastFix.lat; body.lon = state.lastFix.lon; }
     await api("/api/rolls", { method: "POST", body });
     closeModal("roll-modal");
     $("roll-location").value = "";
@@ -248,7 +306,14 @@ $("roll-save").addEventListener("click", async () => {
   } catch (e) { toast(e.message); }
 });
 
-/* New Location */
+/* New Location (create or edit) */
+function resetLocModal(mode) {
+  edit = mode === "edit" ? edit : null;
+  $("loc-title").textContent = mode === "edit" ? "Edit Location" : "New Location";
+  $("loc-save").textContent = mode === "edit" ? "Save changes" : "Save location";
+  $("loc-current").hidden = mode === "edit";
+}
+
 $("new-location-btn").addEventListener("click", async () => {
   try {
     const [cur] = await Promise.all([api("/api/locations/current"), refreshData()]);
@@ -263,9 +328,48 @@ $("new-location-btn").addEventListener("click", async () => {
     $("loc-shot").value = cur.current
       ? cur.current.shot_at.replace(" ", "T") : dtLocalNow();
     state.lastFix = null;
+    resetLocModal("new");
     openModal("loc-modal");
   } catch (e) { toast(e.message); }
 });
+
+function openLocEdit(loc) {
+  $("loc-name").value = loc.name;
+  $("loc-note").value = loc.note || "";
+  $("loc-shot").value = (loc.visited_at || "").replace(" ", "T");
+  edit = { kind: "loc", id: loc.id };
+  resetLocModal("edit");
+  openModal("loc-modal");
+}
+
+/* Edit one roll-at-place entry (note + visit date) */
+function openEntryEdit(rollId, locId) {
+  const roll = state.rolls.find((r) => r.id === rollId);
+  const entry = roll && (roll.locations || []).find((l) => l.id === locId);
+  if (!entry) return;
+  $("entry-place").innerHTML = `Roll #${rollId} · <b>${esc(entry.name)}</b>`;
+  $("entry-shot").value = (entry.visited_at || roll.shot_at || "").replace(" ", "T");
+  $("entry-note").value = entry.note || "";
+  edit = { kind: "entry", rollId, locId };
+  openModal("entry-modal");
+}
+
+/* pencil buttons (rendered dynamically) */
+$("view").addEventListener("click", (e) => {
+  const btn = e.target.closest("[data-act]");
+  if (!btn) return;
+  const act = btn.dataset.act;
+  if (act === "edit-roll") {
+    const r = state.rolls.find((x) => x.id === Number(btn.dataset.id));
+    if (r) openRollEdit(r);
+  } else if (act === "edit-loc") {
+    const l = state.locations.find((x) => x.id === Number(btn.dataset.id));
+    if (l) openLocEdit(l);
+  } else if (act === "edit-entry") {
+    openEntryEdit(Number(btn.dataset.roll), Number(btn.dataset.loc));
+  }
+});
+
 $("loc-cancel").addEventListener("click", () => closeModal("loc-modal"));
 $("loc-save").addEventListener("click", async () => {
   const body = {
@@ -274,8 +378,14 @@ $("loc-save").addEventListener("click", async () => {
     visited_at: $("loc-shot").value,
   };
   if (!body.name) { toast("Location is required"); return; }
-  if (state.lastFix) { body.lat = state.lastFix.lat; body.lon = state.lastFix.lon; }
   try {
+    if (edit && edit.kind === "loc") {
+      await api(`/api/locations/${edit.id}`, { method: "PUT", body });
+      closeModal("loc-modal");
+      await refreshData(); route(); toast("Location updated");
+      return;
+    }
+    if (state.lastFix) { body.lat = state.lastFix.lat; body.lon = state.lastFix.lon; }
     const saved = await api("/api/locations", { method: "POST", body });
     closeModal("loc-modal");
     await refreshData();
@@ -286,9 +396,23 @@ $("loc-save").addEventListener("click", async () => {
   } catch (e) { toast(e.message); }
 });
 
+$("entry-cancel").addEventListener("click", () => closeModal("entry-modal"));
+$("entry-save").addEventListener("click", async () => {
+  if (!edit || edit.kind !== "entry") return;
+  try {
+    await api(`/api/rolls/${edit.rollId}/locations/${edit.locId}`,
+      { method: "PUT", body: {
+          note: $("entry-note").value.trim(),
+          visited_at: $("entry-shot").value } });
+    closeModal("entry-modal");
+    await refreshData(); route(); toast("Entry updated");
+  } catch (e) { toast(e.message); }
+});
+
 /* Settings */
 $("settings-btn").addEventListener("click", () => {
   syncThemeSeg();
+  syncTimeSeg();
   openModal("settings-modal");
 });
 $("settings-close").addEventListener("click", () => closeModal("settings-modal"));
@@ -301,6 +425,22 @@ document.querySelectorAll("#theme-seg button").forEach((btn) =>
       syncThemeSeg();
     } catch (e) { toast(e.message); }
   }));
+
+document.querySelectorAll("#time-seg button").forEach((btn) =>
+  btn.addEventListener("click", async () => {
+    const show = btn.id === "time-show";
+    try {
+      const s = await api("/api/settings", { method: "PUT", body: { show_times: show } });
+      state.show_times = s.show_times === "1";
+      syncTimeSeg();
+      route();   // re-render dates immediately
+    } catch (e) { toast(e.message); }
+  }));
+
+function syncTimeSeg() {
+  $("time-show").classList.toggle("active", state.show_times);
+  $("time-hide").classList.toggle("active", !state.show_times);
+}
 
 function syncThemeSeg() {
   document.querySelectorAll("#theme-seg button").forEach((btn) =>
@@ -387,6 +527,7 @@ $("loc-detect").addEventListener("click", () => detectLocation($("loc-name")));
   try {
     const s = await api("/api/settings");
     applyTheme(s.theme || "auto");
+    state.show_times = s.show_times === "1";
   } catch (e) { applyTheme("auto"); }
   try {
     await refreshData();

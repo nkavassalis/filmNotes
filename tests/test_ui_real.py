@@ -310,14 +310,116 @@ def test_shot_date_defaults_to_now_and_can_be_overridden(browser, server):
                 shot="2024-06-01T09:00")
     cards = page.locator("#view .card")
     assert cards.count() == 2
-    # newest SHOT first, regardless of creation order
-    assert "2024-06-01 09:00" in cards.nth(0).inner_text()
-    assert "2020-01-01 10:00" in cards.nth(1).inner_text()
+    # newest SHOT first; times hidden by default (setting)
+    assert "2024-06-01" in cards.nth(0).inner_text()
+    assert "09:00" not in cards.nth(0).inner_text()
+    assert "2020-01-01" in cards.nth(1).inner_text()
     shot(page, "mobile-shot-dates")
 
     # the location page shows the visit date too
     goto_page(page, "locations")
-    assert "visited 2024-06-01 09:00" in page.inner_text("#view")
+    assert "visited 2024-06-01" in page.inner_text("#view")
+    assert page.errors == []
+    page.context.close()
+
+
+def test_time_toggle_settings(browser, server):
+    page = open_page(browser, viewport=MOBILE)
+    create_roll(page, "Leica M6", "Ilford HP5 400", "Dune Flats",
+                shot="2024-06-01T09:00")
+    assert "09:00" not in page.inner_text("#view")
+    page.click("#settings-btn")
+    page.wait_for_selector("#settings-modal:visible")
+    page.click("#time-show")
+    page.wait_for_selector("#time-show.active")
+    page.click("#settings-close")
+    page.wait_for_selector("#settings-modal", state="hidden")
+    assert "2024-06-01 09:00" in page.inner_text("#view")
+    # persisted server side across reload
+    page.reload()
+    page.wait_for_selector("#view .card")
+    assert "2024-06-01 09:00" in page.inner_text("#view")
+    assert page.errors == []
+    page.context.close()
+
+
+def test_maps_links_coords_and_query(browser, server):
+    page = open_page(
+        browser, viewport=MOBILE,
+        permissions=["geolocation"],
+        geolocation={"latitude": 37.7749, "longitude": -122.4194})
+    page.route("**nominatim.openstreetmap.org**",
+               lambda r: r.fulfill(status=200, content_type="application/json",
+                                   body='{"address": {"city": "SF",'
+                                        ' "state": "California"}}'))
+    # location created WITH detected coordinates -> coords link
+    page.click("#new-roll-btn")
+    page.wait_for_selector("#roll-modal:visible")
+    page.click("#roll-detect")
+    page.wait_for_function(
+        "document.getElementById('roll-location').value.length > 0")
+    page.select_option("#roll-camera", index=0)
+    page.select_option("#roll-film", index=0)
+    page.click("#roll-save")
+    page.wait_for_selector("#roll-modal", state="hidden")
+    # location created WITHOUT coordinates -> name-query link
+    page.click("#new-location-btn")
+    page.wait_for_selector("#loc-modal:visible")
+    page.fill("#loc-name", "Nameless Hollow")
+    page.click("#loc-save")
+    page.wait_for_selector("#loc-modal", state="hidden")
+    goto_page(page, "locations")
+    sf = page.locator(".card", has_text="SF, California")
+    href = sf.locator("a.loc-link").first.get_attribute("href")
+    assert "query=37.7749,-122.4194" in href
+    hollow = page.locator(".card", has_text="Nameless Hollow")
+    href = hollow.locator("a.loc-link").first.get_attribute("href")
+    assert "query=Nameless%20Hollow" in href
+    # coordinates themselves stay hidden
+    assert "37.7749" not in page.inner_text("#view")
+    assert page.errors == []
+    page.context.close()
+
+
+def test_edit_roll_via_pencil(browser, server):
+    page = open_page(browser, viewport=MOBILE)
+    create_roll(page, "Leica MP", "Kodak Portra 400", "Cedar Sink",
+                note="wrong film")
+    page.click('[data-act="edit-roll"]')
+    page.wait_for_selector("#roll-modal:visible")
+    assert page.inner_text("#roll-title") == "Edit Roll"
+    assert page.locator("#roll-loc-group").is_hidden()  # no location edit
+    page.select_option("#roll-film", label="Ilford Delta 100")
+    page.fill("#roll-note", "fixed: Delta, not Portra")
+    page.click("#roll-save")
+    page.wait_for_selector("#roll-modal", state="hidden")
+    body = page.inner_text("#view")
+    assert "Ilford Delta 100" in body and "Kodak Portra 400" not in body
+    assert "fixed: Delta, not Portra" in body
+    assert page.errors == []
+    page.context.close()
+
+
+def test_edit_location_and_entry_via_pencils(browser, server):
+    page = open_page(browser, viewport=MOBILE)
+    create_roll(page, "Bronica SQ-A", "Fujifilm Provia 100", "Cedar Sink")
+    # rename the place (typo fix scenario)
+    goto_page(page, "locations")
+    page.click('[data-act="edit-loc"]')
+    page.wait_for_selector("#loc-modal:visible")
+    assert page.inner_text("#loc-title") == "Edit Location"
+    page.fill("#loc-name", "Cedars Sink")
+    page.click("#loc-save")
+    page.wait_for_selector("#loc-modal", state="hidden")
+    assert "Cedars Sink" in page.inner_text("#view")
+    # edit the per-roll location entry (note on the roll-at-place row)
+    goto_page(page, "rolls")
+    page.click('[data-act="edit-entry"]')
+    page.wait_for_selector("#entry-modal:visible")
+    page.fill("#entry-note", "last 2 frames")
+    page.click("#entry-save")
+    page.wait_for_selector("#entry-modal", state="hidden")
+    assert "last 2 frames" in page.inner_text("#view")
     assert page.errors == []
     page.context.close()
 
@@ -334,7 +436,7 @@ def test_new_location_visit_date_override(browser, server):
     page.click("#loc-save")
     page.wait_for_selector("#loc-modal", state="hidden")
     page.wait_for_selector("text=Quiet Pier")
-    assert "visited 2019-03-03 08:30" in page.inner_text("#view")
+    assert "visited 2019-03-03" in page.inner_text("#view")
     assert page.errors == []
     page.context.close()
 

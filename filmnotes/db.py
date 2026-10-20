@@ -27,7 +27,7 @@ SEED_FILMS = [
     "Fujifilm Acros II",
 ]
 
-DEFAULT_SETTINGS = {"theme": "auto"}
+DEFAULT_SETTINGS = {"theme": "auto", "show_times": "0"}
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS settings (
@@ -170,6 +170,11 @@ def list_cameras(conn):
 def get_camera(conn, camera_id):
     return conn.execute("SELECT * FROM cameras WHERE id=?",
                         (camera_id,)).fetchone()
+
+
+def get_roll(conn, roll_id):
+    return conn.execute("SELECT * FROM rolls WHERE id=?",
+                        (roll_id,)).fetchone()
 
 
 def add_camera(conn, name):
@@ -319,7 +324,7 @@ def list_rolls(conn):
            ORDER BY r.shot_at DESC, r.id DESC""")]
     for r in rolls:
         r["locations"] = [dict(x) for x in conn.execute(
-            """SELECT l.id, l.name, rl.note, rl.visited_at
+            """SELECT l.id, l.name, l.lat, l.lon, rl.note, rl.visited_at
                FROM roll_locations rl
                JOIN locations l ON l.id = rl.location_id
                WHERE rl.roll_id = ?
@@ -366,3 +371,51 @@ def current_roll(conn):
            JOIN films   f ON f.id = r.film_id
            ORDER BY r.shot_at DESC, r.id DESC LIMIT 1""").fetchone()
     return dict(row) if row else None
+
+
+# ---------------------------------------------------------------- editing
+#
+# Whitelisted updates only: keys are fixed by code, never by the client.
+
+def _apply_update(conn, table, id_col, id_val, patch):
+    if not patch:
+        return None
+    sets = ", ".join(f"{k}=?" for k in patch)
+    conn.execute(f"UPDATE {table} SET {sets} WHERE {id_col}=?",
+                 (*patch.values(), id_val))
+    conn.commit()
+    return dict(conn.execute(
+        f"SELECT * FROM {table} WHERE {id_col}=?", (id_val,)).fetchone())
+
+
+def update_roll(conn, roll_id, patch):
+    """patch keys: camera_id, film_id, note, shot_at (already validated)."""
+    return _apply_update(conn, "rolls", "id", roll_id, patch)
+
+
+def update_location(conn, location_id, patch):
+    """patch keys: name, note, visited_at."""
+    return _apply_update(conn, "locations", "id", location_id, patch)
+
+
+def update_roll_location(conn, roll_id, location_id, patch):
+    """Edit one roll-at-place entry: patch keys note, visited_at."""
+    row = conn.execute(
+        "SELECT 1 FROM roll_locations WHERE roll_id=? AND location_id=?",
+        (roll_id, location_id)).fetchone()
+    if row is None:
+        return None
+    if patch:
+        sets = ", ".join(f"{k}=?" for k in patch)
+        conn.execute(f"UPDATE roll_locations SET {sets} "
+                     "WHERE roll_id=? AND location_id=?",
+                     (*patch.values(), roll_id, location_id))
+        conn.commit()
+    if "visited_at" in patch:
+        touch_location_visit(conn, location_id, patch["visited_at"])
+        conn.commit()
+    return dict(conn.execute(
+        "SELECT rl.note, rl.visited_at, l.id, l.name, l.lat, l.lon "
+        "FROM roll_locations rl JOIN locations l ON l.id = rl.location_id "
+        "WHERE rl.roll_id=? AND rl.location_id=?",
+        (roll_id, location_id)).fetchone())

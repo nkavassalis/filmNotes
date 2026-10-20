@@ -114,17 +114,38 @@ svg { stroke: currentColor; fill: none; stroke-width: 1.8;
 .page-title { margin: 4px 2px 12px; font-size: 21px; }
 .empty { color: var(--muted); text-align: center; padding: 40px 0; }
 
-/* ---- cards ---- */
+/* cards */
 .card {
   background: var(--surface);
   border: 1px solid var(--line);
   border-radius: 14px;
   padding: 12px 14px;
   margin-bottom: 10px;
+  position: relative;
 }
-.card h3 { margin: 0 0 2px; font-size: 16px; }
+.card h3 { margin: 0 0 2px; font-size: 16px; padding-right: 34px; }
 .card .meta { color: var(--muted); font-size: 13px; }
 .card .note { margin: 8px 0 0; font-size: 14px; white-space: pre-wrap; }
+
+/* edit pencils (rendered dynamically; delegated via data-act) */
+.card-edit {
+  position: absolute; top: 9px; right: 8px;
+  width: 34px; height: 34px; border-radius: 9px;
+  display: grid; place-items: center; color: var(--muted);
+}
+.card-edit:active { background: var(--surface2); color: var(--accent); }
+.card-edit svg { width: 17px; height: 17px; }
+.entry-row { position: relative; padding-right: 36px; }
+.entry-edit {
+  position: absolute; right: 0; top: 6px;
+  width: 30px; height: 30px; border-radius: 8px;
+  display: grid; place-items: center; color: var(--muted);
+}
+.entry-edit:active { background: var(--surface2); color: var(--accent); }
+.entry-edit svg { width: 15px; height: 15px; }
+
+/* location names link out to Google Maps (coords when known, else query) */
+.loc-link { color: inherit; text-decoration: none; }
 .chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0 0; }
 .chip {
   background: var(--surface2); border-radius: 999px; padding: 3px 10px;

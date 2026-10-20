@@ -29,6 +29,17 @@ installs to the home screen, and keeps everything on your own server.
   context; the date prefills from that roll's shot date). Re-adding a
   place to the same roll updates its entry instead of duplicating it.
   With no rolls yet the location is created standalone.
+- **Edit pencils** — every roll card and every location card has a pencil
+  to fix a mistake (camera, film, dates, notes, place name). Each
+  location entry under a roll has its own pencil for the entry note and
+  visit date.
+- **Maps links** — tap a location name to open Google Maps. If the
+  backend has coordinates (captured when you used the location detect
+  button) it links straight to the spot; otherwise it falls back to a
+  search for the friendly name. Coordinates are never displayed.
+- **Date times hidden by default** — the time is always collected and
+  stored, but dates display as YYYY-MM-DD. The settings cog has a
+  "Dates show time" toggle (Hide/Show) if you want the full timestamp.
 - **Settings** (cog, top right) — UI theme: Auto (follows the system),
   Light, or Dark. Stored server-side, so every device you use agrees.
 - **Pages drawer** — hamburger (top left) or swipe from the left edge

@@ -3,7 +3,8 @@
 ## Project mode: REAL
 
 Software the user relies on from their phone. GitHub-hosted, private,
-full test gates before any push (see Guardrails at the bottom).
+full test gates before any push (see Guardrails at the bottom). Branch:
+**main**.
 
 ## Purpose
 
@@ -69,6 +70,26 @@ the ui tier fails with "Executable doesn't exist" and you must
 - **Flask + SQLite (WAL) + vanilla JS, no build step** — matches rssgate,
   which the user runs on their tailnet. One process, one file of JS, one
   stylesheet.
+- **Edit pencils reuse the create modals** (app.js `edit` context var:
+  {kind:'roll'|'loc'|'entry'}): roll edit hides the location group, loc
+  edit hides the current-roll banner, and a third small modal
+  (`entry-modal`) edits one roll-at-place entry (note + visited date).
+  Pencil buttons are rendered inside cards, so they are wired by event
+  delegation on #view via `data-act` (never ids — the id contract only
+  covers static template ids). Server side: PUT /api/rolls/<id>,
+  PUT /api/locations/<id>, PUT /api/rolls/<id>/locations/<lid>, each a
+  strict field whitelist (web.py), 404 JSON for unknown ids, 400 for
+  empty/invalid patches.
+  SCAR: roll_locations has a COMPOSITE key — updates must filter on
+  roll_id AND location_id (update_roll_location does this by hand; the
+  generic _apply_update helper must never be pointed at the junction).
+- **Maps links** (app.js `mapUrl`): coordinates when the location has
+  them (captured client-side by the detect button at creation), else a
+  name query. Coordinates stay hidden in the UI; target=_blank so iOS
+  standalone hands them to Safari (rssgate pattern).
+- **show_times setting** ("0"/"1", default "0"): the time is ALWAYS
+  collected and stored; the toggle only changes fmtDT's display. Stored
+  like theme (server-side, shared across devices).
 - **Rolls accumulate locations (many-to-many)** via `roll_locations(roll_id,
   location_id, note, visited_at)`. This is the user's mental model and the
   original spec ("rolls with EACH location under it"): **New Location
@@ -195,9 +216,12 @@ the ui tier fails with "Executable doesn't exist" and you must
 ## Guardrails (REAL project)
 
 - GitHub account must be `nkavassalis` (verify `gh auth status` before
-  any push; STOP if it's anyone else). Repo `nkavassalis/filmNotes` is
-  **PUBLIC by the user's explicit decision** — the public-forever rule
-  and the no-secrets/no-internal-details rule matter extra here.
+  any push; STOP if it's anyone else). Repo `nkavassalis/filmNotes`,
+  default branch **main**, **PUBLIC by the user's explicit decision** —
+  the public-forever rule and the no-secrets/no-internal-details rule
+  matter extra here. `tests/screenshots/` is GITIGNORED: screenshots
+  taken against the live DB contain the user's real shoot data and once
+  got pushed (history was rewritten to purge them — never re-add).
 - Never push broken or untested code: BOTH tiers green first —
   `.venv/bin/python -m pytest` AND `.venv/bin/python -m pytest -m ui`
   (14 browser tests incl. computed-style and geometry assertions; the

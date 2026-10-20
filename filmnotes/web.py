@@ -202,6 +202,65 @@ def create_app(db_path, conn=None):
         name = _str(data, "name", required=True)
         return jsonify(db.add_film(conn, name)), 201
 
+    # ------------------------------------------------------------ editing
+
+    @app.put("/api/rolls/<int:roll_id>")
+    def api_edit_roll(roll_id):
+        if db.get_roll(conn, roll_id) is None:
+            return jsonify(error="roll not found"), 404
+        data = _body()
+        patch = {}
+        if "camera_id" in data:
+            if not isinstance(data["camera_id"], int) or isinstance(data["camera_id"], bool) \
+                    or db.get_camera(conn, data["camera_id"]) is None:
+                raise BadRequest("unknown camera_id")
+            patch["camera_id"] = data["camera_id"]
+        if "film_id" in data:
+            if not isinstance(data["film_id"], int) or isinstance(data["film_id"], bool) \
+                    or db.get_film(conn, data["film_id"]) is None:
+                raise BadRequest("unknown film_id")
+            patch["film_id"] = data["film_id"]
+        if "shot_at" in data:
+            patch["shot_at"] = _datetime(data, "shot_at")
+        if "note" in data:
+            patch["note"] = _note(data)
+        if not patch:
+            raise BadRequest("no known fields in body")
+        return jsonify(db.update_roll(conn, roll_id, patch))
+
+    @app.put("/api/rolls/<int:roll_id>/locations/<int:location_id>")
+    def api_edit_roll_location(roll_id, location_id):
+        if db.get_roll(conn, roll_id) is None:
+            return jsonify(error="roll not found"), 404
+        data = _body()
+        patch = {}
+        if "note" in data:
+            patch["note"] = _note(data)
+        if "visited_at" in data:
+            patch["visited_at"] = _datetime(data, "visited_at")
+        if not patch:
+            raise BadRequest("no known fields in body")
+        entry = db.update_roll_location(conn, roll_id, location_id, patch)
+        if entry is None:
+            return jsonify(error="that roll has no entry for that location"), 404
+        return jsonify(entry)
+
+    @app.put("/api/locations/<int:location_id>")
+    def api_edit_location(location_id):
+        if db.get_location(conn, location_id) is None:
+            return jsonify(error="location not found"), 404
+        data = _body()
+        patch = {}
+        if "name" in data:
+            patch["name"] = _str(data, "name", required=True)
+        if "note" in data:
+            patch["note"] = _note(data)
+        if "visited_at" in data:
+            patch["visited_at"] = _datetime(data, "visited_at")
+        if not patch:
+            raise BadRequest("no known fields in body")
+        return jsonify(db.update_location(conn, location_id, patch))
+
     # ------------------------------------------------------------ settings
 
     @app.get("/api/settings")
@@ -216,6 +275,14 @@ def create_app(db_path, conn=None):
             if data["theme"] not in THEMES:
                 raise BadRequest("theme must be auto|light|dark")
             patch["theme"] = data["theme"]
+        if "show_times" in data:
+            v = data["show_times"]
+            if isinstance(v, bool):
+                patch["show_times"] = "1" if v else "0"
+            elif v in ("0", "1", 0, 1):
+                patch["show_times"] = str(v)
+            else:
+                raise BadRequest("show_times must be a boolean")
         if not patch:
             raise BadRequest("no known settings in body")
         return jsonify(db.set_settings(conn, patch))

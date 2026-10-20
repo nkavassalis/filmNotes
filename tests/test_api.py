@@ -262,3 +262,103 @@ def test_roll_creating_location_borrows_its_shot_at(client):
                                     "shot_at": "2021-08-08 08:08"})
     locs = {l["name"]: l for l in get_json(client.get("/api/locations"))}
     assert locs["Fresh Inlet"]["visited_at"] == "2021-08-08 08:08"
+
+
+# ---------------------------------------------------------------- editing
+
+def _mk_roll(client, **kw):
+    body = {"camera_id": 1, "film_id": 1, "location_name": "Pier",
+            "shot_at": "2026-01-01 10:00"}
+    body.update(kw)
+    return get_json(client.post("/api/rolls", json=body))
+
+
+def test_edit_roll_fields(client):
+    roll = _mk_roll(client)
+    cams = get_json(client.get("/api/cameras"))
+    films = get_json(client.get("/api/films"))
+    other_cam = [c for c in cams if c["id"] != roll["camera_id"]][0]
+    other_film = [f for f in films if f["id"] != roll["film_id"]][0]
+    r = client.put(f"/api/rolls/{roll['id']}", json={
+        "camera_id": other_cam["id"], "film_id": other_film["id"],
+        "shot_at": "2025-12-31 23:45", "note": "was mislabeled"})
+    assert r.status_code == 200
+    out = get_json(r)
+    assert out["camera_id"] == other_cam["id"]
+    assert out["film_id"] == other_film["id"]
+    assert out["shot_at"] == "2025-12-31 23:45"
+    assert out["note"] == "was mislabeled"
+
+
+def test_edit_roll_validation(client):
+    roll = _mk_roll(client)
+    r = client.put("/api/rolls/99999", json={"note": "x"})
+    assert r.status_code == 404 and "error" in get_json(r)
+    r = client.put(f"/api/rolls/{roll['id']}", json={})
+    assert r.status_code == 400
+    r = client.put(f"/api/rolls/{roll['id']}", json={"camera_id": 99999})
+    assert r.status_code == 400 and "camera" in get_json(r)["error"]
+    r = client.put(f"/api/rolls/{roll['id']}", json={"film_id": "x"})
+    assert r.status_code == 400
+    r = client.put(f"/api/rolls/{roll['id']}", json={"shot_at": "nope"})
+    assert r.status_code == 400
+
+
+def test_edit_location(client):
+    loc = get_json(client.post("/api/locations", json={"name": "Old Name"}))
+    r = client.put(f"/api/locations/{loc['id']}",
+                   json={"name": "New Name", "visited_at": "2026-02-02 02:02"})
+    assert r.status_code == 200
+    assert get_json(r)["name"] == "New Name"
+    assert get_json(r)["visited_at"] == "2026-02-02 02:02"
+    r = client.put(f"/api/locations/{loc['id']}", json={"name": "  "})
+    assert r.status_code == 400
+    r = client.put("/api/locations/99999", json={"name": "x"})
+    assert r.status_code == 404
+
+
+def test_edit_roll_location_entry(client):
+    roll = _mk_roll(client)
+    loc = get_json(client.post("/api/locations", json={"name": "Second Spot"}))
+    client.post("/api/locations", json={"name": "Second Spot"})  # attaches
+    r = client.put(f"/api/rolls/{roll['id']}/locations/{loc['id']}",
+                   json={"note": "gate locked", "visited_at": "2026-01-05 07:00"})
+    assert r.status_code == 200
+    entry = get_json(r)
+    assert entry["note"] == "gate locked"
+    assert entry["visited_at"] == "2026-01-05 07:00"
+    # only that entry changed; the Pier entry keeps its own note/date
+    rolls = get_json(client.get("/api/rolls"))
+    by_name = {l["name"]: l for l in rolls[0]["locations"]}
+    assert by_name["Pier"]["visited_at"] == "2026-01-01 10:00"
+    # unknown pair -> 404, empty patch -> 400
+    r = client.put(f"/api/rolls/{roll['id']}/locations/99999",
+                   json={"note": "x"})
+    assert r.status_code == 404
+    r = client.put(f"/api/rolls/{roll['id']}/locations/{loc['id']}", json={})
+    assert r.status_code == 400
+
+
+def test_edit_updates_mru(client):
+    roll = _mk_roll(client, camera_id=1, shot_at="2020-01-01 00:00")
+    cams = get_json(client.get("/api/cameras"))
+    used = [c for c in cams if c["used_count"]]
+    assert [c["id"] for c in used] == [1]
+    cam2 = [c for c in cams if c["used_count"] == 0][0]["id"]
+    client.put(f"/api/rolls/{roll['id']}", json={"camera_id": cam2})
+    cams = get_json(client.get("/api/cameras"))
+    used = [c for c in cams if c["used_count"]]
+    assert [c["id"] for c in used] == [cam2]
+    assert used[0]["last_used"] == "2020-01-01 00:00"
+
+
+def test_settings_show_times(client):
+    assert get_json(client.get("/api/settings"))["show_times"] == "0"
+    assert get_json(client.put("/api/settings",
+                               json={"show_times": True}))["show_times"] == "1"
+    assert get_json(client.put("/api/settings",
+                               json={"show_times": False}))["show_times"] == "0"
+    assert get_json(client.put("/api/settings",
+                               json={"show_times": "1"}))["show_times"] == "1"
+    r = client.put("/api/settings", json={"show_times": "maybe"})
+    assert r.status_code == 400

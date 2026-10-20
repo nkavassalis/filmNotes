@@ -61,19 +61,21 @@
 <!-- Overlays ship hidden; [hidden]{display:none!important} is load-bearing. -->
 <section id="roll-modal" class="modal" hidden aria-label="New roll">
   <div class="modal-card">
-    <h2>New Roll</h2>
+    <h2 id="roll-title">New Roll</h2>
     <label for="roll-camera">Camera</label>
     <select id="roll-camera"></select>
     <label for="roll-film">Film type</label>
     <select id="roll-film"></select>
-    <label for="roll-location">Location</label>
-    <div class="field-row">
-      <input id="roll-location" list="location-list" placeholder="Where was this shot?" autocomplete="off">
-      <button id="roll-detect" class="btn ghost icon" title="Detect my location" aria-label="Detect my location">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8z"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg>
-      </button>
+    <div id="roll-loc-group">
+      <label for="roll-location">Location</label>
+      <div class="field-row">
+        <input id="roll-location" list="location-list" placeholder="Where was this shot?" autocomplete="off">
+        <button id="roll-detect" class="btn ghost icon" title="Detect my location" aria-label="Detect my location">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8z"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg>
+        </button>
+      </div>
+      <datalist id="location-list"></datalist>
     </div>
-    <datalist id="location-list"></datalist>
     <label for="roll-shot">Shot on</label>
     <input id="roll-shot" type="datetime-local" step="60">
     <label for="roll-note">Note <span class="opt">(optional)</span></label>
@@ -87,7 +89,7 @@
 
 <section id="loc-modal" class="modal" hidden aria-label="New location">
   <div class="modal-card">
-    <h2>New Location</h2>
+    <h2 id="loc-title">New Location</h2>
     <div id="loc-current" class="readonly-note"></div>
     <label for="loc-name">Location</label>
     <div class="field-row">
@@ -107,6 +109,21 @@
   </div>
 </section>
 
+<section id="entry-modal" class="modal" hidden aria-label="Edit location entry">
+  <div class="modal-card">
+    <h2>Location entry</h2>
+    <div id="entry-place" class="readonly-note"></div>
+    <label for="entry-shot">Visited on</label>
+    <input id="entry-shot" type="datetime-local" step="60">
+    <label for="entry-note">Note</label>
+    <textarea id="entry-note" rows="3"></textarea>
+    <div class="modal-actions">
+      <button id="entry-cancel" class="btn ghost">Cancel</button>
+      <button id="entry-save" class="btn primary">Save changes</button>
+    </div>
+  </div>
+</section>
+
 <section id="settings-modal" class="modal" hidden aria-label="Settings">
   <div class="modal-card">
     <h2>Settings</h2>
@@ -115,6 +132,11 @@
       <button id="theme-auto" role="radio">Auto</button>
       <button id="theme-light" role="radio">Light</button>
       <button id="theme-dark" role="radio">Dark</button>
+    </div>
+    <label>Dates show time</label>
+    <div class="seg" id="time-seg" role="radiogroup">
+      <button id="time-hide" role="radio">Hide</button>
+      <button id="time-show" role="radio">Show</button>
     </div>
     <div class="modal-actions">
       <button id="settings-close" class="btn primary">Done</button>

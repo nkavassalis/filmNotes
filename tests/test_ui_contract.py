@@ -18,7 +18,8 @@ def test_hidden_rule_is_important():
 
 
 def test_overlays_ship_hidden():
-    for mid in ("roll-modal", "loc-modal", "settings-modal", "veil", "toast"):
+    for mid in ("roll-modal", "loc-modal", "entry-modal", "settings-modal",
+                "veil", "toast"):
         tag = re.search(rf'<(section|div) id="{mid}"[^>]*>', TEMPLATE)
         assert tag, f"#{mid} missing"
         assert "hidden" in tag.group(0), f"#{mid} must ship hidden"
