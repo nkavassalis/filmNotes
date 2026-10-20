@@ -451,6 +451,14 @@ function syncThemeSeg() {
 document.querySelectorAll(".modal").forEach((m) =>
   m.addEventListener("click", (e) => { if (e.target === m) closeModal(m.id); }));
 
+/* Escape dismisses the topmost popover (and the drawer) */
+document.addEventListener("keydown", (e) => {
+  if (e.key !== "Escape") return;
+  for (const id of ["entry-modal", "roll-modal", "loc-modal", "settings-modal"])
+    if (!$(id).hidden) { closeModal(id); return; }
+  closeDrawer();
+});
+
 /* ------------------------------------------------------------- theme */
 
 function applyTheme(theme) {

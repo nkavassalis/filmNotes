@@ -296,6 +296,27 @@ def test_roll_modal_keeps_bottombar_visible(browser, server):
     page.context.close()
 
 
+def test_escape_closes_popovers(browser, server):
+    page = open_page(browser)
+    for btn, modal in (("#new-roll-btn", "#roll-modal"),
+                       ("#new-location-btn", "#loc-modal"),
+                       ("#settings-btn", "#settings-modal")):
+        page.click(btn)
+        page.wait_for_selector(f"{modal}:visible")
+        page.keyboard.press("Escape")
+        page.wait_for_selector(modal, state="hidden")
+    # settings dismissed by Escape -> bottom bar back
+    assert page.is_visible("#bottombar")
+    # and the drawer too
+    page.click("#menu-btn")
+    page.wait_for_selector("#drawer.open")
+    page.keyboard.press("Escape")
+    page.wait_for_selector("#drawer:not(.open)")
+    assert not page.is_visible("#veil")
+    assert page.errors == []
+    page.context.close()
+
+
 def test_shot_date_defaults_to_now_and_can_be_overridden(browser, server):
     import re
     page = open_page(browser, viewport=MOBILE)
