@@ -843,3 +843,35 @@ def test_lenses_flow(browser, server):
     assert "55mm f/1.2" in mp
     assert page.errors == []
     page.context.close()
+
+
+def test_lens_compatibility_filters_dropdown(browser, server):
+    page = open_page(browser, viewport=MOBILE)
+    goto_page(page, "cameras")
+    page.click("#lenses-toggle")
+    for name in ("50mm f/1.4", "90mm f/2"):
+        page.fill("#new-lens", name)
+        page.click("#add-lens")
+        page.wait_for_selector(f"text={name}")
+    assert "All cameras" in page.inner_text("#view")   # unassigned = fits all
+    # assign the 50mm to Leica MP only (pencil appears in edit mode)
+    page.click("#edit-mode-btn")
+    page.locator('[data-act="edit-lens"]').first.click()
+    page.wait_for_selector("#lens-modal:visible")
+    assert page.inner_text("#lens-modal-title") == "50mm f/1.4"
+    page.locator("#lens-cam-list .chip-toggle", has_text="Leica MP").click()
+    assert page.locator("#lens-cam-list .chip-toggle[aria-pressed='true']").count() == 1
+    page.click("#lens-save")
+    page.wait_for_selector("#lens-modal", state="hidden")
+    page.wait_for_selector("text=Fits: Leica MP")
+    # the New Roll lens dropdown now filters by camera
+    page.click("#new-roll-btn")
+    page.wait_for_selector("#roll-modal:visible")
+    page.select_option("#roll-camera", label="Leica M6")
+    opts = page.locator("#roll-lens option").all_inner_texts()
+    assert "50mm f/1.4" not in opts and "90mm f/2" in opts
+    page.select_option("#roll-camera", label="Leica MP")
+    opts = page.locator("#roll-lens option").all_inner_texts()
+    assert "50mm f/1.4" in opts and "90mm f/2" in opts
+    assert page.errors == []
+    page.context.close()

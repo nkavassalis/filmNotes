@@ -39,6 +39,11 @@ CREATE TABLE IF NOT EXISTS lenses (
   name       TEXT NOT NULL UNIQUE,
   created_at TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS lens_cameras (
+  lens_id   INTEGER NOT NULL REFERENCES lenses(id),
+  camera_id INTEGER NOT NULL REFERENCES cameras(id),
+  PRIMARY KEY (lens_id, camera_id)
+);
 CREATE TABLE IF NOT EXISTS cameras (
   id         INTEGER PRIMARY KEY,
   name       TEXT NOT NULL UNIQUE,
@@ -206,18 +211,49 @@ def add_camera(conn, name):
 
 # ---------------------------------------------------------------- lenses
 
+def _lens_camera_ids(conn, lens_id):
+    return [r["camera_id"] for r in conn.execute(
+        "SELECT camera_id FROM lens_cameras WHERE lens_id=? ORDER BY camera_id",
+        (lens_id,))]
+
+
 def list_lenses(conn):
-    return [dict(r) for r in conn.execute(
+    lenses = [dict(r) for r in conn.execute(
         """SELECT l.id, l.name, COUNT(r.id) AS used_count,
                   MAX(COALESCE(r.shot_at, r.created_at)) AS last_used
            FROM lenses l LEFT JOIN rolls r ON r.lens_id = l.id
            GROUP BY l.id ORDER BY l.name""")]
+    for l in lenses:
+        l["camera_ids"] = _lens_camera_ids(conn, l["id"])
+    return lenses
 
 
 def get_lens(conn, lens_id):
     row = conn.execute("SELECT * FROM lenses WHERE id=?",
                        (lens_id,)).fetchone()
-    return dict(row) if row else None
+    if row is None:
+        return None
+    lens = dict(row)
+    lens["camera_ids"] = _lens_camera_ids(conn, lens_id)
+    return lens
+
+
+def set_lens_cameras(conn, lens_id, camera_ids):
+    """Replace the lens's compatible-camera list. Empty list = compatible
+    with ALL cameras (unrestricted)."""
+    if conn.execute("SELECT 1 FROM lenses WHERE id=?",
+                    (lens_id,)).fetchone() is None:
+        return None
+    for cid in camera_ids:
+        if conn.execute("SELECT 1 FROM cameras WHERE id=?",
+                        (cid,)).fetchone() is None:
+            raise ValueError("unknown camera_id")
+    conn.execute("DELETE FROM lens_cameras WHERE lens_id=?", (lens_id,))
+    conn.executemany(
+        "INSERT INTO lens_cameras(lens_id, camera_id) VALUES (?,?)",
+        [(lens_id, cid) for cid in set(camera_ids)])
+    conn.commit()
+    return get_lens(conn, lens_id)
 
 
 def add_lens(conn, name):
@@ -226,9 +262,7 @@ def add_lens(conn, name):
         cur = conn.execute("INSERT INTO lenses(name, created_at) VALUES (?,?)",
                            (name, now()))
         conn.commit()
-        row = conn.execute("SELECT * FROM lenses WHERE id=?",
-                           (cur.lastrowid,)).fetchone()
-    return dict(row)
+    return get_lens(conn, row["id"] if row else cur.lastrowid)
 
 
 # ---------------------------------------------------------------- films

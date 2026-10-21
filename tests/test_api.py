@@ -537,3 +537,24 @@ def test_roll_lens_lifecycle(client):
     assert client.post("/api/rolls", json={
         "camera_id": 1, "film_id": 1, "location_name": "x",
         "lens_id": "50mm"}).status_code == 400
+
+
+def test_lens_compatibility_api(client):
+    lens = get_json(client.post("/api/lenses", json={"name": "35mm"}))
+    assert lens["camera_ids"] == []
+    cams = [c["id"] for c in get_json(client.get("/api/cameras"))[:2]]
+    r = client.put(f"/api/lenses/{lens['id']}", json={"camera_ids": cams})
+    # stored canonically sorted; input order is irrelevant
+    assert r.status_code == 200 and get_json(r)["camera_ids"] == sorted(cams)
+    assert get_json(client.get("/api/lenses"))[0]["camera_ids"] == sorted(cams)
+    # a roll may still only reference existing lenses; compatibility is UI-side
+    assert client.put(f"/api/lenses/{lens['id']}",
+                      json={"camera_ids": []}).status_code == 200
+    assert client.put(f"/api/lenses/{lens['id']}",
+                      json={"camera_ids": [99999]}).status_code == 400
+    assert client.put(f"/api/lenses/{lens['id']}",
+                      json={"camera_ids": "1"}).status_code == 400
+    assert client.put(f"/api/lenses/{lens['id']}",
+                      json={"camera_ids": [1, "2"]}).status_code == 400
+    assert client.put("/api/lenses/99999",
+                      json={"camera_ids": []}).status_code == 404

@@ -189,9 +189,14 @@ function renderCameras(view) {
     </div>` +
     (lensCount ? mruSort(state.lenses).map((l) => `
     <article class="card">
+      <button class="card-edit" data-act="edit-lens" data-id="${l.id}"
+              aria-label="Edit lens compatibility" title="Compatible cameras?">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h4L20 8l-4-4L4 16v4z"/><path d="M13.5 6.5l4 4"/></svg>
+      </button>
       <h3>${esc(l.name)}</h3>
       <div class="meta">${l.used_count} roll${l.used_count === 1 ? "" : "s"}` +
         (l.last_used ? ` · last used ${esc(fmtDT(l.last_used))}` : "") + `</div>
+      <div class="meta">${lensCompatText(l)}</div>
     </article>`).join("")
      : `<div class="empty">No lenses yet.<br>Lenses are optional — add some to
         pick one when logging a roll.</div>`) : "");
@@ -291,7 +296,6 @@ $("new-roll-btn").addEventListener("click", async () => {
   try { await refreshData(); } catch (e) { toast(e.message); return; }
   fillSelect($("roll-camera"), mruSort(state.cameras));
   fillSelect($("roll-film"), mruSort(state.films));
-  fillLensSelect();
   applyLensDefault();
   fillDatalist();
   $("roll-note").value = "";
@@ -306,12 +310,12 @@ $("new-roll-btn").addEventListener("click", async () => {
 function openRollEdit(roll) {
   fillSelect($("roll-camera"), mruSort(state.cameras));
   fillSelect($("roll-film"), mruSort(state.films));
-  fillLensSelect();
   $("roll-no").value = roll.roll_no || "";
   const cam = state.cameras.find((c) => c.name === roll.camera);
   const film = state.films.find((f) => f.name === roll.film);
   if (cam) $("roll-camera").value = String(cam.id);
   if (film) $("roll-film").value = String(film.id);
+  fillLensSelect(Number($("roll-camera").value));
   $("roll-lens").value = roll.lens_id != null ? String(roll.lens_id) : "";
   $("roll-shot").value = (roll.shot_at || "").replace(" ", "T");
   $("roll-note").value = roll.note || "";
@@ -358,6 +362,40 @@ $("roll-save").addEventListener("click", async () => {
     location.hash = "#/rolls";
     route();
     toast("Roll saved");
+  } catch (e) { toast(e.message); }
+});
+
+/* Lens compatibility modal (camera toggle chips on the cameras page) */
+let lensEditTarget = null;
+
+function openLensEdit(lens) {
+  lensEditTarget = lens;
+  $("lens-modal-title").textContent = lens.name;
+  $("lens-cam-list").innerHTML = mruSort(state.cameras).map((c) =>
+    `<button class="chip-toggle" data-cam="${c.id}" ` +
+    `aria-pressed="${(lens.camera_ids || []).includes(c.id)}">${esc(c.name)}</button>`
+  ).join("");
+  openModal("lens-modal");
+}
+
+$("lens-cam-list").addEventListener("click", (e) => {
+  const b = e.target.closest(".chip-toggle");
+  if (!b) return;
+  b.setAttribute("aria-pressed",
+    b.getAttribute("aria-pressed") === "true" ? "false" : "true");
+});
+
+$("lens-cancel").addEventListener("click", () => closeModal("lens-modal"));
+$("lens-save").addEventListener("click", async () => {
+  if (!lensEditTarget) return;
+  const ids = [...document.querySelectorAll(
+    "#lens-cam-list .chip-toggle[aria-pressed='true']")]
+    .map((b) => Number(b.dataset.cam));
+  try {
+    await api(`/api/lenses/${lensEditTarget.id}`,
+      { method: "PUT", body: { camera_ids: ids } });
+    closeModal("lens-modal");
+    await refreshData(); route(); toast("Compatibility saved");
   } catch (e) { toast(e.message); }
 });
 
@@ -436,6 +474,9 @@ $("view").addEventListener("click", (e) => {
     if (l) openLocEdit(l);
   } else if (act === "edit-entry") {
     openEntryEdit(Number(btn.dataset.roll), Number(btn.dataset.loc));
+  } else if (act === "edit-lens") {
+    const l = state.lenses.find((x) => x.id === Number(btn.dataset.id));
+    if (l) openLensEdit(l);
   } else if (act === "add-loc") {
     openLocAdd(Number(btn.dataset.id));
   } else if (act === "del-roll") {
@@ -559,7 +600,8 @@ $("edit-mode-btn").addEventListener("click", () => {
 /* Escape dismisses the topmost popover (and the drawer) */
 document.addEventListener("keydown", (e) => {
   if (e.key !== "Escape") return;
-  for (const id of ["entry-modal", "roll-modal", "loc-modal", "settings-modal"])
+  for (const id of ["entry-modal", "roll-modal", "loc-modal", "lens-modal",
+                    "settings-modal"])
     if (!$(id).hidden) { closeModal(id); return; }
   closeDrawer();
 });
@@ -589,22 +631,41 @@ function fillSelect(sel, rows) {
 }
 
 /* Lenses are fully optional: the select carries a blank "None" option.
-   Once a camera has roll history, its most recent lens becomes the
-   default whenever the camera selection changes (create mode only). */
-function fillLensSelect() {
+   A lens is offered only when compatible with the chosen camera:
+   no camera_ids = compatible with ALL; otherwise only the assigned ones.
+   Once a camera has roll history, its most recent compatible lens becomes
+   the default whenever the camera selection changes (create mode only). */
+function lensCompatible(l, cameraId) {
+  return !l.camera_ids || !l.camera_ids.length || l.camera_ids.includes(cameraId);
+}
+
+function lensCompatText(l) {
+  if (!l.camera_ids || !l.camera_ids.length) return "All cameras";
+  const names = l.camera_ids.map((id) => {
+    const c = state.cameras.find((x) => x.id === id);
+    return c ? c.name : `#${id}`;
+  });
+  return `Fits: ${esc(names.join(", "))}`;
+}
+
+function fillLensSelect(cameraId) {
   const sel = $("roll-lens");
-  sel.innerHTML = `<option value=""></option>` + mruSort(state.lenses).map((l) =>
+  const ok = mruSort(state.lenses.filter((l) => lensCompatible(l, cameraId)));
+  sel.innerHTML = `<option value=""></option>` + ok.map((l) =>
     `<option value="${l.id}">${esc(l.name)}</option>`).join("");
 }
 
 function mostRecentLensFor(cameraId) {
   // state.rolls is newest-shot-first already
-  const hit = state.rolls.find((r) => r.camera_id === cameraId && r.lens_id);
+  const hit = state.rolls.find((r) => r.camera_id === cameraId && r.lens_id
+    && lensCompatible(state.lenses.find((l) => l.id === r.lens_id) || {}, cameraId));
   return hit ? String(hit.lens_id) : "";
 }
 
 function applyLensDefault() {
-  $("roll-lens").value = mostRecentLensFor(Number($("roll-camera").value));
+  const camId = Number($("roll-camera").value);
+  fillLensSelect(camId);
+  $("roll-lens").value = mostRecentLensFor(camId);
 }
 
 $("roll-camera").addEventListener("change", () => {

@@ -218,6 +218,21 @@ def create_app(db_path, conn=None):
         name = _str(data, "name", required=True)
         return jsonify(db.add_lens(conn, name)), 201
 
+    @app.put("/api/lenses/<int:lens_id>")
+    def api_edit_lens(lens_id):
+        data = _body()
+        ids = data.get("camera_ids")
+        if not isinstance(ids, list) \
+                or any(not isinstance(c, int) or isinstance(c, bool) for c in ids):
+            raise BadRequest("camera_ids must be a list of integers")
+        try:
+            lens = db.set_lens_cameras(conn, lens_id, ids)
+        except ValueError:
+            raise BadRequest("unknown camera_id")
+        if lens is None:
+            return jsonify(error="lens not found"), 404
+        return jsonify(lens)
+
     # ------------------------------------------------------------ films
 
     @app.get("/api/films")

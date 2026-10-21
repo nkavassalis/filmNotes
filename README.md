@@ -25,6 +25,10 @@ installs to the home screen, and keeps everything on your own server.
   nothing changes. Once you start using them, the New Roll popover
   **auto-selects the most recently used lens for whichever camera you
   pick** (switching cameras re-applies that camera's latest lens).
+  In edit mode each lens card gets a pencil to choose **compatible
+  cameras** (toggle chips): the lens then only appears in the dropdown
+  for those cameras. A lens with none picked fits **every** camera —
+  assignments narrow, they never gate.
 - **New Roll** (bottom bar) — popover with Camera, Film, and (optional)
   Lens dropdowns, a
   Location field with a friendly name derived from the device location

@@ -86,3 +86,9 @@ def test_lens_wiring():
 
 def test_drawer_has_no_pages_heading():
     assert "drawer-head" not in TEMPLATE
+
+
+def test_lens_compatibility_wiring():
+    assert 'id="lens-modal"' in TEMPLATE and 'id="lens-cam-list"' in TEMPLATE
+    assert "edit-lens" in SCRIPT and "openLensEdit" in SCRIPT
+    assert "chip-toggle" in CSS and "lensCompatible" in SCRIPT

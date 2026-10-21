@@ -194,6 +194,19 @@ the ui tier fails with "Executable doesn't exist" and you must
   set; edit always sends it (null clears). list_rolls/get_roll expose
   camera_id, film_id, lens_id + lens NAME (client needs the ids for the
   per-camera MRU). No seeding — lenses start empty by design.
+- **Lens compatibility** (v0.7): `lens_cameras(lens_id, camera_id)`
+  junction, edited via PUT /api/lenses/<id> {camera_ids:[ints]} (replace
+  semantics, canonically sorted, 400 on unknown/non-int). SEMANTICS:
+  empty assignment = compatible with ALL cameras; assignments NARROW,
+  they never gate (so pre-existing/unassigned lenses keep working).
+  Client-side filtering only (db.lens_compatible in app.js) — the server
+  does NOT reject a roll referencing an incompatible lens (history must
+  survive re-assignment). The lens dropdown re-fills on camera change
+  (fillLensSelect(cameraId)); the per-camera MRU default also respects
+  compatibility. Lens cards show "All cameras" / "Fits: A, B"; the
+  compatibility editor is a modal (#lens-modal) with aria-pressed
+  .chip-toggle buttons, opened by the edit-mode pencil (data-act=
+  "edit-lens").
 - **MRU dropdown sorting** is done client-side (`mruSort`) from
   `used_count`/`last_used` supplied by `list_cameras`/`list_films`. Server
   returns alphabetical; UI owns ordering.

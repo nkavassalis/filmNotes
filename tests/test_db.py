@@ -371,3 +371,19 @@ def test_migrate_adds_lens_id(conn):
     conn.execute("ALTER TABLE rolls DROP COLUMN lens_id")
     db.init_db(conn)
     assert db.list_rolls(conn) is not None        # column back in place
+
+
+def test_lens_compatibility(conn):
+    lens = db.add_lens(conn, "50mm f/1.4")
+    cam1 = db.list_cameras(conn)[0]["id"]
+    cam2 = db.list_cameras(conn)[1]["id"]
+    assert lens["camera_ids"] == []               # unassigned = all cameras
+    lens = db.set_lens_cameras(conn, lens["id"], [cam1, cam2, cam1])
+    assert sorted(lens["camera_ids"]) == sorted([cam1, cam2])   # deduped
+    assert db.list_lenses(conn)[0]["camera_ids"] == lens["camera_ids"]
+    lens = db.set_lens_cameras(conn, lens["id"], [])            # back to all
+    assert lens["camera_ids"] == []
+    import pytest
+    with pytest.raises(ValueError):
+        db.set_lens_cameras(conn, lens["id"], [99999])
+    assert db.set_lens_cameras(conn, 99999, []) is None
