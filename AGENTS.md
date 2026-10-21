@@ -250,6 +250,12 @@ the ui tier fails with "Executable doesn't exist" and you must
   wiring (manifest, standalone, icons, safe areas) is contract-tested and
   Chromium-rendered, but Add-to-Home-Screen on an actual iPhone behind the
   tunnel is a manual check.
+- **iOS standalone bottom-gap fix is unverified on a device** — the
+  "empty space below the bottom bar" in the iOS simulator was traced to
+  `html` lacking a background (the 100dvh-vs-webview strip showed the
+  white canvas). Fix: `html` now paints `var(--bg)` and body has a
+  `100vh` fallback. Playwright/Chromium cannot reproduce the iOS
+  standalone quirk; confirm in the simulator or on the phone.
 - Geolocation *denial* UX (permission prompt dismissed) shows the toast
   fallback; only the success and network-failure paths are automated.
 - Multi-device theme sync is verified only via reload on one context.

@@ -55,9 +55,15 @@ html, body {
   margin: 0;
   overscroll-behavior: none;
   touch-action: manipulation;
+  /* html must carry the bg too: in iOS standalone, 100dvh can come out
+     shorter than the webview (home-indicator strip), and the uncovered
+     strip would otherwise show the default white canvas below the
+     bottom bar */
+  background: var(--bg);
 }
 html { -webkit-text-size-adjust: 100%; }
 body {
+  height: 100vh;      /* fallback for engines without dvh */
   height: 100dvh;
   display: flex;
   flex-direction: column;
