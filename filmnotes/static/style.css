@@ -237,7 +237,7 @@ body.edit-mode .add-loc { display: block; }
   display: flex;
   background: var(--surface);
   border-top: 1px solid var(--line);
-  padding-bottom: max(0px, calc(env(safe-area-inset-bottom) - 100vh + 100dvh));
+  padding-bottom: max(12px, calc(env(safe-area-inset-bottom) - 100vh + 100dvh));
 }
 /* iPhone 18 Pro / iOS 26 standalone: fixed bottom:0 pinned to a layout
    viewport ending ~100pt above the physical bottom, leaving a --bg dead

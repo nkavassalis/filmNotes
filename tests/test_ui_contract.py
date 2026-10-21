@@ -45,8 +45,14 @@ def test_every_drawer_page_has_a_route():
 def test_pwa_wiring():
     assert 'rel="manifest"' in TEMPLATE
     assert 'apple-touch-icon' in TEMPLATE
-    assert 'apple-mobile-web-app-capable' in TEMPLATE
-    assert 'viewport-fit=cover' in TEMPLATE
+    # head mirrors rssgate (the app that renders edge-to-edge on iOS 26):
+    # plain viewport, NO viewport-fit=cover, NO apple-mobile-web-app-*
+    # legacy tags — those shrank the iOS 26 webview to 812pt (2026-10-21
+    # dead-strip saga; see AGENTS.md).
+    assert 'name="viewport" content="width=device-width, initial-scale=1"' in TEMPLATE
+    assert 'viewport-fit=cover' not in TEMPLATE
+    assert 'apple-mobile-web-app-status-bar-style' not in TEMPLATE
+    assert 'theme-color' in TEMPLATE
     manifest = (ROOT / "filmnotes" / "static" / "manifest.webmanifest").read_text()
     assert '"display": "standalone"' in manifest
     for icon in ("icon-192.png", "icon-512.png", "apple-touch-icon.png",

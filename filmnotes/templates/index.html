@@ -2,14 +2,11 @@
 <html lang="en" data-theme="{{ 'light' if settings.theme == 'light' else ('dark' if settings.theme == 'dark' else '') }}">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>filmNotes</title>
 <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
 <link rel="apple-touch-icon" href="/static/apple-touch-icon.png">
 <link rel="manifest" href="/static/manifest.webmanifest?v={{ app_version }}">
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="mobile-web-app-capable" content="yes">
 {% set chrome = '#ffffff' if settings.theme == 'light' else '#1e1c1a' %}
 <meta name="theme-color" content="{{ chrome }}">
 <link rel="stylesheet" href="/static/style.css?v={{ app_version }}">
