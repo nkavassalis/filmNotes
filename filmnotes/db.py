@@ -34,6 +34,11 @@ CREATE TABLE IF NOT EXISTS settings (
   key   TEXT PRIMARY KEY,
   value TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS lenses (
+  id         INTEGER PRIMARY KEY,
+  name       TEXT NOT NULL UNIQUE,
+  created_at TEXT NOT NULL
+);
 CREATE TABLE IF NOT EXISTS cameras (
   id         INTEGER PRIMARY KEY,
   name       TEXT NOT NULL UNIQUE,
@@ -58,6 +63,7 @@ CREATE TABLE IF NOT EXISTS rolls (
   roll_no     TEXT NOT NULL DEFAULT '',
   camera_id   INTEGER NOT NULL REFERENCES cameras(id),
   film_id     INTEGER NOT NULL REFERENCES films(id),
+  lens_id     INTEGER REFERENCES lenses(id),
   note        TEXT NOT NULL DEFAULT '',
   shot_at     TEXT NOT NULL DEFAULT '',
   created_at  TEXT NOT NULL
@@ -125,6 +131,9 @@ def _migrate(conn):
     if "roll_no" not in cols("rolls"):
         conn.execute("ALTER TABLE rolls ADD COLUMN roll_no TEXT NOT NULL DEFAULT ''")
         conn.execute("UPDATE rolls SET roll_no = CAST(id AS TEXT) WHERE roll_no = ''")
+    # v0.6: optional lens per roll (lenses live on the cameras page).
+    if "lens_id" not in cols("rolls"):
+        conn.execute("ALTER TABLE rolls ADD COLUMN lens_id INTEGER")
     conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_rolls_roll_no "
                  "ON rolls(roll_no)")
 
@@ -191,6 +200,33 @@ def add_camera(conn, name):
                            (name, now()))
         conn.commit()
         row = conn.execute("SELECT * FROM cameras WHERE id=?",
+                           (cur.lastrowid,)).fetchone()
+    return dict(row)
+
+
+# ---------------------------------------------------------------- lenses
+
+def list_lenses(conn):
+    return [dict(r) for r in conn.execute(
+        """SELECT l.id, l.name, COUNT(r.id) AS used_count,
+                  MAX(COALESCE(r.shot_at, r.created_at)) AS last_used
+           FROM lenses l LEFT JOIN rolls r ON r.lens_id = l.id
+           GROUP BY l.id ORDER BY l.name""")]
+
+
+def get_lens(conn, lens_id):
+    row = conn.execute("SELECT * FROM lenses WHERE id=?",
+                       (lens_id,)).fetchone()
+    return dict(row) if row else None
+
+
+def add_lens(conn, name):
+    row = conn.execute("SELECT * FROM lenses WHERE name = ?", (name,)).fetchone()
+    if row is None:
+        cur = conn.execute("INSERT INTO lenses(name, created_at) VALUES (?,?)",
+                           (name, now()))
+        conn.commit()
+        row = conn.execute("SELECT * FROM lenses WHERE id=?",
                            (cur.lastrowid,)).fetchone()
     return dict(row)
 
@@ -324,10 +360,12 @@ def list_rolls(conn):
     """
     rolls = [dict(r) for r in conn.execute(
         """SELECT r.id, r.roll_no, r.note, r.shot_at, r.created_at,
-                  c.name AS camera, f.name AS film
+                  r.camera_id, r.film_id, r.lens_id,
+                  c.name AS camera, f.name AS film, le.name AS lens
            FROM rolls r
            JOIN cameras c ON c.id = r.camera_id
            JOIN films   f ON f.id = r.film_id
+           LEFT JOIN lenses le ON le.id = r.lens_id
            ORDER BY r.shot_at DESC, r.id DESC""")]
     for r in rolls:
         r["locations"] = [dict(x) for x in conn.execute(
@@ -340,7 +378,7 @@ def list_rolls(conn):
 
 
 def add_roll(conn, camera_id, film_id, location_id, note="", shot_at=None,
-             roll_no=None):
+             roll_no=None, lens_id=None):
     """Create a roll and link its first location (New Roll popover).
 
     roll_no is the user-visible number; blank/None means auto (the row id,
@@ -352,9 +390,9 @@ def add_roll(conn, camera_id, film_id, location_id, note="", shot_at=None,
                     (location_id,)).fetchone() is None:
         raise ValueError("unknown location_id")
     cur = conn.execute(
-        "INSERT INTO rolls(roll_no, camera_id, film_id, note, shot_at, "
-        "created_at) VALUES (?,?,?,?,?,?)",
-        (roll_no or "", camera_id, film_id, note, shot_at, now()))
+        "INSERT INTO rolls(roll_no, camera_id, film_id, lens_id, note, "
+        "shot_at, created_at) VALUES (?,?,?,?,?,?,?)",
+        (roll_no or "", camera_id, film_id, lens_id, note, shot_at, now()))
     roll_id = cur.lastrowid
     if not roll_no:
         conn.execute("UPDATE rolls SET roll_no=? WHERE id=?",

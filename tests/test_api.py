@@ -500,3 +500,40 @@ def test_add_location_to_specific_roll(client):
                        json={"name": "X", "roll_id": 99999}).status_code == 400
     assert client.post("/api/locations",
                        json={"name": "X", "roll_id": "1"}).status_code == 400
+
+
+# ------------------------------------------------------------------ lenses
+
+def test_lens_endpoints(client):
+    assert get_json(client.get("/api/lenses")) == []
+    r = client.post("/api/lenses", json={"name": "50mm f/1.4"})
+    assert r.status_code == 201
+    assert get_json(r)["name"] == "50mm f/1.4"
+    lenses = get_json(client.get("/api/lenses"))
+    assert [l["name"] for l in lenses] == ["50mm f/1.4"]
+    assert lenses[0]["used_count"] == 0
+    assert client.post("/api/lenses", json={"name": "  "}).status_code == 400
+
+
+def test_roll_lens_lifecycle(client):
+    lens = get_json(client.post("/api/lenses", json={"name": "85mm"}))
+    r = _mk_roll(client, lens_id=lens["id"])
+    assert r["lens_id"] == lens["id"]
+    roll = get_json(client.get("/api/rolls"))[0]
+    assert roll["lens"] == "85mm"
+    assert roll["camera_id"] and roll["lens_id"] == lens["id"]
+    # optional: roll without lens
+    r2 = _mk_roll(client)
+    assert r2["lens_id"] is None
+    # set and clear via edit
+    assert get_json(client.put(f"/api/rolls/{r2['id']}",
+                               json={"lens_id": lens["id"]}))["lens_id"] == lens["id"]
+    assert get_json(client.put(f"/api/rolls/{r2['id']}",
+                               json={"lens_id": None}))["lens_id"] is None
+    # validation
+    assert client.post("/api/rolls", json={
+        "camera_id": 1, "film_id": 1, "location_name": "x",
+        "lens_id": 99999}).status_code == 400
+    assert client.post("/api/rolls", json={
+        "camera_id": 1, "film_id": 1, "location_name": "x",
+        "lens_id": "50mm"}).status_code == 400

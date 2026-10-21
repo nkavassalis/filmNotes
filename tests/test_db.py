@@ -331,3 +331,43 @@ def test_relink_merges_duplicate_entries(conn):
     assert r["locations"][0]["note"] == "beta note"
     # relinking a non-existent entry returns None
     assert db.relink_roll_location(conn, roll["id"], a["id"], b["id"]) is None
+
+
+# ------------------------------------------------------------------ lenses
+
+def test_lenses_crud_and_usage(conn):
+    a = db.add_lens(conn, "50mm f/1.4")
+    b = db.add_lens(conn, "50mm f/1.4")           # idempotent by name
+    assert a["id"] == b["id"]
+    db.add_lens(conn, "90mm f/2")
+    names = [l["name"] for l in db.list_lenses(conn)]
+    assert names == ["50mm f/1.4", "90mm f/2"]
+    cam = db.list_cameras(conn)[0]["id"]
+    film = db.list_films(conn)[0]["id"]
+    loc = db.add_location(conn, "Home")
+    db.add_roll(conn, cam, film, loc["id"], lens_id=a["id"])
+    stats = {l["name"]: l for l in db.list_lenses(conn)}
+    assert stats["50mm f/1.4"]["used_count"] == 1
+    assert stats["90mm f/2"]["used_count"] == 0
+    assert db.get_lens(conn, a["id"])["name"] == "50mm f/1.4"
+    assert db.get_lens(conn, 99999) is None
+
+
+def test_roll_lens_optional_and_clearable(conn):
+    cam = db.list_cameras(conn)[0]["id"]
+    film = db.list_films(conn)[0]["id"]
+    loc = db.add_location(conn, "Home")
+    lens = db.add_lens(conn, "35mm f/2")
+    r = db.add_roll(conn, cam, film, loc["id"])   # lens optional
+    assert r["lens_id"] is None
+    db.update_roll(conn, r["id"], {"lens_id": lens["id"]})
+    assert db.list_rolls(conn)[0]["lens"] == "35mm f/2"
+    db.update_roll(conn, r["id"], {"lens_id": None})
+    assert db.list_rolls(conn)[0]["lens_id"] is None
+
+
+def test_migrate_adds_lens_id(conn):
+    conn.execute("DROP INDEX IF EXISTS idx_rolls_roll_no")
+    conn.execute("ALTER TABLE rolls DROP COLUMN lens_id")
+    db.init_db(conn)
+    assert db.list_rolls(conn) is not None        # column back in place

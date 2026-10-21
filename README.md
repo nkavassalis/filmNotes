@@ -19,7 +19,14 @@ installs to the home screen, and keeps everything on your own server.
   Bronica SQ-A; Portra, Delta, HP5, Tri-X, T-Max, Velvia, Provia, Acros,
   XP2...). Add your own from the page. Dropdowns sort **most recently
   used first**.
-- **New Roll** (bottom bar) — popover with Camera and Film dropdowns, a
+- **Lenses** — an expandable **Lenses** section at the bottom of the
+  Cameras page (collapsed by default; tap to reveal, add, and browse).
+  Lenses are **entirely optional**: leave the Lens field blank and
+  nothing changes. Once you start using them, the New Roll popover
+  **auto-selects the most recently used lens for whichever camera you
+  pick** (switching cameras re-applies that camera's latest lens).
+- **New Roll** (bottom bar) — popover with Camera, Film, and (optional)
+  Lens dropdowns, a
   Location field with a friendly name derived from the device location
   service (tap the crosshair to detect; the field is always editable so
   you can override with your own name), a **Shot on** date/time (defaults
@@ -57,7 +64,7 @@ installs to the home screen, and keeps everything on your own server.
 - **Settings** (cog, top right) — UI theme: Auto (follows the system),
   Light, or Dark. Stored server-side, so every device you use agrees.
 - **Pages drawer** — hamburger (top left) or swipe from the left edge
-  exposes Rolls / Locations / Cameras / Film.
+  exposes Rolls / Locations / Cameras / Film (no heading, just the list).
 - **Bottom bar** — New Roll and New Location, pinned across every screen.
   It hides only while the settings popover is up.
 

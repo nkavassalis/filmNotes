@@ -29,7 +29,8 @@ def test_every_js_id_exists_in_template():
     used = set(re.findall(r'\$\("([\w-]+)"\)', SCRIPT))
     present = set(re.findall(r'id="([\w-]+)"', TEMPLATE))
     # ids created dynamically by render functions
-    dynamic = {"new-camera", "add-camera", "new-film", "add-film"}
+    dynamic = {"new-camera", "add-camera", "new-film", "add-film",
+               "lenses-toggle", "new-lens", "add-lens"}
     missing = used - present - dynamic
     assert not missing, f"app.js references unknown ids: {sorted(missing)}"
 
@@ -75,3 +76,13 @@ def test_bottombar_is_fixed_to_viewport_bottom():
     assert "position: fixed" in block and "bottom: 0" in block
     view_block = re.search(r"#view\s*\{([^}]*)\}", CSS).group(1)
     assert "var(--bottombar-h)" in view_block   # content pads for the bar
+
+
+def test_lens_wiring():
+    assert 'id="roll-lens"' in TEMPLATE
+    assert 'fillLensSelect' in SCRIPT and 'mostRecentLensFor' in SCRIPT
+    assert "lenses-toggle" in SCRIPT and "section-toggle" in CSS
+
+
+def test_drawer_has_no_pages_heading():
+    assert "drawer-head" not in TEMPLATE

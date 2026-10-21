@@ -181,6 +181,19 @@ the ui tier fails with "Executable doesn't exist" and you must
 - **MIT licensed** (LICENSE file, Copyright Nick Kavassalis); the
   settings popover links to the public repo (`.repo-link`, target=_blank
   so iOS standalone hands it to Safari — same pattern as maps links).
+- **Lenses are optional per roll** (v0.6): `lenses(id, name UNIQUE,
+  created_at)` + `rolls.lens_id` nullable FK (migration ALTERs the
+  column). They live as an EXPANDABLE section on the cameras page
+  (app.js `lensesOpen` module var, `#lenses-toggle` with aria-expanded,
+  add-row + cards when open) — deliberately NOT a drawer page. The New
+  Roll popover has a Lens select whose first option is blank ("");
+  `applyLensDefault()` sets it to `mostRecentLensFor(cameraId)` (scans
+  state.rolls, newest-shot-first, first roll with that camera_id and a
+  lens_id) on modal open and on camera change in CREATE mode only —
+  edit mode keeps the roll's own lens. Create sends lens_id only when
+  set; edit always sends it (null clears). list_rolls/get_roll expose
+  camera_id, film_id, lens_id + lens NAME (client needs the ids for the
+  per-camera MRU). No seeding — lenses start empty by design.
 - **MRU dropdown sorting** is done client-side (`mruSort`) from
   `used_count`/`last_used` supplied by `list_cameras`/`list_films`. Server
   returns alphabetical; UI owns ordering.

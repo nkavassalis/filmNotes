@@ -243,6 +243,18 @@ body.settings-open #bottombar { display: none; }  /* spec: hidden only for setti
 .drawer-item.active { border-left-color: var(--accent);
                       background: var(--surface2); color: var(--accent); }
 .drawer-item.active svg { color: var(--accent); }
+
+/* expandable Lenses section on the cameras page */
+.section-toggle {
+  display: flex; align-items: center; gap: 8px;
+  width: 100%; margin: 20px 0 4px; padding: 6px 2px;
+  font-size: 16px; font-weight: 700; color: var(--text);
+}
+.section-toggle .count { color: var(--muted); font-weight: 400; font-size: 13px; }
+.section-toggle .chev { margin-left: auto; color: var(--muted); transition: transform .18s ease; }
+.section-toggle .chev svg { width: 18px; height: 18px; }
+.section-toggle[aria-expanded="true"] .chev { transform: rotate(180deg); }
+
 #veil {
   position: fixed; inset: 0; background: var(--veil); z-index: 20;
 }

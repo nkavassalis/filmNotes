@@ -796,3 +796,50 @@ def test_settings_repo_link(browser, server):
     page.wait_for_selector("#settings-modal", state="hidden")
     assert page.errors == []
     page.context.close()
+
+
+def test_lenses_flow(browser, server):
+    page = open_page(browser, viewport=MOBILE)
+    # drawer no longer shows the "Pages" heading
+    page.click("#menu-btn")
+    page.wait_for_selector("#drawer.open")
+    assert "Pages" not in page.inner_text("#drawer")
+    page.keyboard.press("Escape")
+    page.wait_for_selector("#drawer:not(.open)")
+    # Lenses section starts collapsed on the cameras page
+    goto_page(page, "cameras")
+    assert page.locator("#lenses-toggle").is_visible()
+    assert page.locator("#new-lens").count() == 0
+    page.click("#lenses-toggle")
+    page.wait_for_selector("#new-lens")
+    page.fill("#new-lens", "55mm f/1.2")
+    page.click("#add-lens")
+    page.wait_for_selector("text=55mm f/1.2")
+    # log a roll WITH the lens
+    page.click("#new-roll-btn")
+    page.wait_for_selector("#roll-modal:visible")
+    page.select_option("#roll-camera", label="Leica MP")
+    page.select_option("#roll-film", label="Kodak Portra 400")
+    page.select_option("#roll-lens", label="55mm f/1.2")
+    page.fill("#roll-location", "Pier")
+    page.click("#roll-save")
+    page.wait_for_selector("#roll-modal", state="hidden")
+    page.wait_for_selector("text=55mm f/1.2")
+    assert "55mm f/1.2" in page.inner_text("#view")
+    # lenses stay optional; the MRU lens auto-fills per camera
+    page.click("#new-roll-btn")
+    page.wait_for_selector("#roll-modal:visible")
+    page.select_option("#roll-camera", label="Leica M6")
+    assert page.input_value("#roll-lens") == ""      # no M6 history
+    page.select_option("#roll-camera", label="Leica MP")
+    assert page.input_value("#roll-lens") != ""      # MP's recent lens
+    page.select_option("#roll-film", label="Ilford HP5 400")
+    page.fill("#roll-location", "Dune")
+    page.click("#roll-save")                          # save with defaulted lens
+    page.wait_for_selector("#roll-modal", state="hidden")
+    page.wait_for_function("document.querySelectorAll('#view .card').length === 2")
+    cards = [page.locator("#view .card").nth(i).inner_text() for i in range(2)]
+    mp = next(t for t in cards if "Leica MP" in t and "HP5" in t)
+    assert "55mm f/1.2" in mp
+    assert page.errors == []
+    page.context.close()

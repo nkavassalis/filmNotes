@@ -12,8 +12,8 @@
 "use strict";
 
 const $ = (id) => document.getElementById(id);
-const state = { rolls: [], locations: [], cameras: [], films: [], theme: "auto",
-                show_times: false, lastFix: null };
+const state = { rolls: [], locations: [], cameras: [], films: [], lenses: [],
+                theme: "auto", show_times: false, lastFix: null };
 let edit = null;   // {kind: 'roll'|'loc'|'entry', ...} while an edit modal is open
 
 async function api(path, opts = {}) {
@@ -61,11 +61,11 @@ function dtLocalNow() {
 /* ------------------------------------------------------------- data */
 
 async function refreshData() {
-  const [rolls, locations, cameras, films] = await Promise.all([
+  const [rolls, locations, cameras, films, lenses] = await Promise.all([
     api("/api/rolls"), api("/api/locations"),
-    api("/api/cameras"), api("/api/films"),
+    api("/api/cameras"), api("/api/films"), api("/api/lenses"),
   ]);
-  Object.assign(state, { rolls, locations, cameras, films });
+  Object.assign(state, { rolls, locations, cameras, films, lenses });
 }
 
 /* most-recently-used first; never-used entries fall back to name order */
@@ -122,6 +122,7 @@ function renderRolls(view) {
       <div class="chips">
         <span class="chip">${esc(r.camera)}</span>
         <span class="chip">${esc(r.film)}</span>
+        ${r.lens ? `<span class="chip">${esc(r.lens)}</span>` : ""}
         <button class="add-loc" data-act="add-loc" data-id="${r.id}">+ location</button>
       </div>
       ${r.note ? `<p class="note">${esc(r.note)}</p>` : ""}
@@ -162,7 +163,10 @@ function renderLocations(view) {
     </article>`).join("");
 }
 
+let lensesOpen = false;   // expandable Lenses section on the cameras page
+
 function renderCameras(view) {
+  const lensCount = state.lenses.length;
   view.innerHTML = `<h1 class="page-title">Cameras</h1>
     <div class="add-row">
       <input id="new-camera" placeholder="Add a camera..." autocomplete="off">
@@ -173,12 +177,41 @@ function renderCameras(view) {
       <h3>${esc(c.name)}</h3>
       <div class="meta">${c.used_count} roll${c.used_count === 1 ? "" : "s"}` +
         (c.last_used ? ` · last used ${esc(fmtDT(c.last_used))}` : "") + `</div>
-    </article>`).join("");
+    </article>`).join("") + `
+    <button id="lenses-toggle" class="section-toggle" aria-expanded="${lensesOpen}">
+      Lenses <span class="count">${lensCount}</span>
+      <span class="chev"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></span>
+    </button>` +
+    (lensesOpen ? `
+    <div class="add-row">
+      <input id="new-lens" placeholder="Add a lens..." autocomplete="off">
+      <button id="add-lens" class="btn primary">Add</button>
+    </div>` +
+    (lensCount ? mruSort(state.lenses).map((l) => `
+    <article class="card">
+      <h3>${esc(l.name)}</h3>
+      <div class="meta">${l.used_count} roll${l.used_count === 1 ? "" : "s"}` +
+        (l.last_used ? ` · last used ${esc(fmtDT(l.last_used))}` : "") + `</div>
+    </article>`).join("")
+     : `<div class="empty">No lenses yet.<br>Lenses are optional — add some to
+        pick one when logging a roll.</div>`) : "");
   $("add-camera").addEventListener("click", async () => {
     const name = $("new-camera").value.trim();
     if (!name) return;
     try { await api("/api/cameras", { method: "POST", body: { name } });
           $("new-camera").value = ""; await refreshData(); route(); }
+    catch (e) { toast(e.message); }
+  });
+  $("lenses-toggle").addEventListener("click", () => {
+    lensesOpen = !lensesOpen;
+    renderCameras($("view"));
+  });
+  const addLens = $("add-lens");
+  if (addLens) addLens.addEventListener("click", async () => {
+    const name = $("new-lens").value.trim();
+    if (!name) return;
+    try { await api("/api/lenses", { method: "POST", body: { name } });
+          $("new-lens").value = ""; await refreshData(); route(); }
     catch (e) { toast(e.message); }
   });
 }
@@ -258,6 +291,8 @@ $("new-roll-btn").addEventListener("click", async () => {
   try { await refreshData(); } catch (e) { toast(e.message); return; }
   fillSelect($("roll-camera"), mruSort(state.cameras));
   fillSelect($("roll-film"), mruSort(state.films));
+  fillLensSelect();
+  applyLensDefault();
   fillDatalist();
   $("roll-note").value = "";
   $("roll-no").value = "";
@@ -271,11 +306,13 @@ $("new-roll-btn").addEventListener("click", async () => {
 function openRollEdit(roll) {
   fillSelect($("roll-camera"), mruSort(state.cameras));
   fillSelect($("roll-film"), mruSort(state.films));
+  fillLensSelect();
   $("roll-no").value = roll.roll_no || "";
   const cam = state.cameras.find((c) => c.name === roll.camera);
   const film = state.films.find((f) => f.name === roll.film);
   if (cam) $("roll-camera").value = String(cam.id);
   if (film) $("roll-film").value = String(film.id);
+  $("roll-lens").value = roll.lens_id != null ? String(roll.lens_id) : "";
   $("roll-shot").value = (roll.shot_at || "").replace(" ", "T");
   $("roll-note").value = roll.note || "";
   edit = { kind: "roll", id: roll.id };
@@ -293,6 +330,7 @@ $("roll-save").addEventListener("click", async () => {
         roll_no: rollNo,
         camera_id: Number($("roll-camera").value),
         film_id: Number($("roll-film").value),
+        lens_id: $("roll-lens").value ? Number($("roll-lens").value) : null,
         shot_at: $("roll-shot").value,
         note: $("roll-note").value.trim(),
       }});
@@ -309,6 +347,7 @@ $("roll-save").addEventListener("click", async () => {
     };
     const rn = $("roll-no").value.trim();
     if (rn) body.roll_no = rn;
+    if ($("roll-lens").value) body.lens_id = Number($("roll-lens").value);
     if (!body.location_name) { toast("Location is required"); return; }
     if (state.lastFix) { body.lat = state.lastFix.lat; body.lon = state.lastFix.lon; }
     await api("/api/rolls", { method: "POST", body });
@@ -548,6 +587,29 @@ function fillSelect(sel, rows) {
   sel.innerHTML = rows.map((r) =>
     `<option value="${r.id}">${esc(r.name)}</option>`).join("");
 }
+
+/* Lenses are fully optional: the select carries a blank "None" option.
+   Once a camera has roll history, its most recent lens becomes the
+   default whenever the camera selection changes (create mode only). */
+function fillLensSelect() {
+  const sel = $("roll-lens");
+  sel.innerHTML = `<option value=""></option>` + mruSort(state.lenses).map((l) =>
+    `<option value="${l.id}">${esc(l.name)}</option>`).join("");
+}
+
+function mostRecentLensFor(cameraId) {
+  // state.rolls is newest-shot-first already
+  const hit = state.rolls.find((r) => r.camera_id === cameraId && r.lens_id);
+  return hit ? String(hit.lens_id) : "";
+}
+
+function applyLensDefault() {
+  $("roll-lens").value = mostRecentLensFor(Number($("roll-camera").value));
+}
+
+$("roll-camera").addEventListener("change", () => {
+  if (!edit || edit.kind !== "roll") applyLensDefault();
+});
 function fillDatalist() {
   $("location-list").innerHTML = state.locations.map((l) =>
     `<option value="${esc(l.name)}">`).join("");

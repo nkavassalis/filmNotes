@@ -127,6 +127,11 @@ def create_app(db_path, conn=None):
             raise BadRequest("unknown camera_id")
         if db.get_film(conn, data["film_id"]) is None:
             raise BadRequest("unknown film_id")
+        lens_id = data.get("lens_id")
+        if lens_id is not None:
+            if not isinstance(lens_id, int) or isinstance(lens_id, bool) \
+                    or db.get_lens(conn, lens_id) is None:
+                raise BadRequest("unknown lens_id")
         note = _note(data)
         shot_at = _datetime(data, "shot_at")
         roll_no = _str(data, "roll_no", max_len=20)
@@ -142,7 +147,7 @@ def create_app(db_path, conn=None):
             loc = db.get_or_create_location(
                 conn, name, _num(data, "lat"), _num(data, "lon"), shot_at)
         roll = db.add_roll(conn, data["camera_id"], data["film_id"],
-                           loc["id"], note, shot_at, roll_no or None)
+                           loc["id"], note, shot_at, roll_no or None, lens_id)
         return jsonify(roll), 201
 
     # ------------------------------------------------------------ locations
@@ -201,6 +206,18 @@ def create_app(db_path, conn=None):
         name = _str(data, "name", required=True)
         return jsonify(db.add_camera(conn, name)), 201
 
+    # ------------------------------------------------------------ lenses
+
+    @app.get("/api/lenses")
+    def api_lenses():
+        return jsonify(db.list_lenses(conn))
+
+    @app.post("/api/lenses")
+    def api_new_lens():
+        data = _body()
+        name = _str(data, "name", required=True)
+        return jsonify(db.add_lens(conn, name)), 201
+
     # ------------------------------------------------------------ films
 
     @app.get("/api/films")
@@ -231,6 +248,15 @@ def create_app(db_path, conn=None):
                     or db.get_film(conn, data["film_id"]) is None:
                 raise BadRequest("unknown film_id")
             patch["film_id"] = data["film_id"]
+        if "lens_id" in data:
+            if data["lens_id"] is None:
+                patch["lens_id"] = None          # clear the lens
+            elif not isinstance(data["lens_id"], int) \
+                    or isinstance(data["lens_id"], bool) \
+                    or db.get_lens(conn, data["lens_id"]) is None:
+                raise BadRequest("unknown lens_id")
+            else:
+                patch["lens_id"] = data["lens_id"]
         if "shot_at" in data:
             patch["shot_at"] = _datetime(data, "shot_at")
         if "note" in data:
