@@ -343,6 +343,11 @@ label:first-of-type { margin-top: 0; }
 input, select, textarea {
   width: 100%;
   font: inherit;
+  /* iOS auto-ZOOMS the whole page on focus when a form control's computed
+     font-size is < 16px — breaks the rigid shell into horizontal scroll
+     (body is 15px, so `font: inherit` lands at 15px). user-scalable=no /
+     maximum-scale do NOT prevent this zoom. 16px is the only fix. */
+  font-size: 16px;
   color: var(--text);
   background: var(--bg);
   border: 1px solid var(--line);

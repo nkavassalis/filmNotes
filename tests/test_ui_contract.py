@@ -84,6 +84,14 @@ def test_bottombar_is_fixed_to_viewport_bottom():
     assert "var(--bottombar-h)" in view_block   # content pads for the bar
 
 
+def test_form_controls_are_16px():
+    # iOS auto-zooms the page on focus when a control's font-size is <16px
+    # (horizontal scroll breaks the rigid shell); user-scalable=no does NOT
+    # stop it. All inputs/selects/textareas must be 16px.
+    block = re.search(r"input, select, textarea\s*\{([^}]*)\}", CSS).group(1)
+    assert "font-size: 16px" in block
+
+
 def test_lens_wiring():
     assert 'id="roll-lens"' in TEMPLATE
     assert 'fillLensSelect' in SCRIPT and 'mostRecentLensFor' in SCRIPT
