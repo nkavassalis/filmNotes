@@ -336,15 +336,18 @@ the ui tier fails with "Executable doesn't exist" and you must
   "empty space below the bottom bar" in the iOS simulator was traced to
   `html` lacking a background (the 100dvh-vs-webview strip showed the
   white canvas). Fix: `html` now paints `var(--bg)` and body has a
-  `100vh` fallback. **Regression on real hardware (iPhone 18 Pro, iOS
-  26, screenshot 2026-10-21): a ~100pt dead strip in `--bg` colour still
-  appeared below the fixed bar** — `bottom:0` pins to a layout viewport
-  that ends above the physical bottom there. Second-layer fix applied:
-  `#bottombar::after` paints `--surface` 30vh past the bar's bottom edge
-  (covers an inside-webview strip) and the manifest `background_color`
-  became `#1e1c1a` (the bar colour, covers an outside-webview window
-  strip). Playwright cannot reproduce this; **ask Nick to re-screenshot
-  the Locations page on the 18 Pro after reinstalling/refreshing.**
+  `100vh` fallback. **iPhone 18 Pro / iOS 26 (2026-10-21): a ~46pt strip
+  in the page colour persisted below the fixed bar.** Pixel-sampling the
+  user's screenshots settled it: the strip is `#141311` = the head
+  `theme-color` value, NOT the manifest `background_color` (which the
+  phone had already refetched per the server log) — iOS paints the
+  outside-webview home-indicator zone from `theme-color`. Fix: the
+  `theme-color` meta is now rendered from the theme (light `#ffffff`,
+  otherwise `#1e1c1a` = the bottom-bar colour), so the zone blends with
+  the bar. `#bottombar::after` skirt + manifest `background_color` are
+  kept as inside-webview layers. **Playwright cannot reproduce any of
+  this — ask Nick to just reopen the app (no reboot/reinstall ritual
+  needed; the shell is no-cache) and re-screenshot.**
 - Geolocation *denial* UX (permission prompt dismissed) shows the toast
   fallback; only the success and network-failure paths are automated.
 - **Incident 2026-10-21:** two broken `-m ui` runs (before the fixture's

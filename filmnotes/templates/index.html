@@ -10,7 +10,8 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="mobile-web-app-capable" content="yes">
-<meta name="theme-color" content="#141312">
+{% set chrome = '#ffffff' if settings.theme == 'light' else '#1e1c1a' %}
+<meta name="theme-color" content="{{ chrome }}">
 <link rel="stylesheet" href="/static/style.css?v={{ app_version }}">
 </head>
 <body>
