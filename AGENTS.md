@@ -218,11 +218,16 @@ the ui tier fails with "Executable doesn't exist" and you must
 
 ## Known issues / TODOs
 
-- Rolls/locations/cameras/films are create-only; no edit/delete yet —
-  notably no way to unlink a location from a roll or delete a location.
+- Cameras/films are still create-only (no rename/delete; renaming would
+  orphan usage stats). Rolls and locations now have full edit + delete
+  (edit-mode gated, confirm dialogs); locations refuse deletion while any
+  roll references them.
+- UI tier flake risk: toasts auto-hide after 2.6s, so a heavily loaded
+  machine can occasionally lose a `#toast:visible` race in Playwright
+  (observed once, never reproduced). If a toast assertion flakes, re-run
+  before debugging.
 - No auth: relies on the WireGuard/Tailscale perimeter (by design).
 - Nominatim is the only geocoder; no offline place names (see unverified).
-- Camera/film rename would orphan usage stats (no update path at all yet).
 
 ## Testing limitations / unverified
 
