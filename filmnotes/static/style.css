@@ -226,7 +226,7 @@ body.edit-mode .add-loc { display: block; }
    positioning pins it to the physical bottom; #view pads for its height. */
 #bottombar {
   position: fixed; left: 0; right: 0; bottom: 0; z-index: 30;
-  /* iOS 26 standalone (iPhone 18 Pro, telemetry 2026-10-21): the webview
+  /* iOS 27 standalone (iPhone 18 Pro, telemetry 2026-10-21): the webview
      is letterboxed 62pt above the physical bottom (vh 874 vs dvh 812) and
      CLIPS content at 812 — the bar cannot extend into the system zone
      (theme-color paints it instead). That letterbox already clears the
@@ -239,7 +239,7 @@ body.edit-mode .add-loc { display: block; }
   border-top: 1px solid var(--line);
   padding-bottom: max(12px, calc(env(safe-area-inset-bottom) - 100vh + 100dvh));
 }
-/* iPhone 18 Pro / iOS 26 standalone: fixed bottom:0 pinned to a layout
+/* iPhone 18 Pro / iOS 27 standalone: fixed bottom:0 pinned to a layout
    viewport ending ~100pt above the physical bottom, leaving a --bg dead
    strip under the bar (screenshot 2026-10-21). Paint past our own bottom
    edge so any inside-webview strip takes the bar colour; the manifest

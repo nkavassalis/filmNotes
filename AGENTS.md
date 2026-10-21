@@ -333,10 +333,10 @@ the ui tier fails with "Executable doesn't exist" and you must
   Chromium-rendered, but Add-to-Home-Screen on an actual iPhone behind the
   tunnel is a manual check.
 - **iOS standalone dead strip — RESOLVED 2026-10-21 (iPhone 18 Pro /
-  iOS 26).** Root cause, established by on-device telemetry (a temporary
+  iOS 27).** Root cause, established by on-device telemetry (a temporary
   overlay POSTing geometry to `/api/dbg`): the legacy head tags
   `viewport-fit=cover` + `apple-mobile-web-app-status-bar-style:
-  black-translucent` made iOS 26 letterbox the standalone webview 62pt
+  black-translucent` made iOS 27 letterbox the standalone webview 62pt
   above the physical bottom (`inner 812` vs `screen 874`, webview CLIPS
   at 812 — content cannot extend into the zone). `~/rssgate`, same phone,
   same iOS, renders edge-to-edge with a plain head — the control case
