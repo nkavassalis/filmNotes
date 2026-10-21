@@ -226,17 +226,18 @@ body.edit-mode .add-loc { display: block; }
    positioning pins it to the physical bottom; #view pads for its height. */
 #bottombar {
   position: fixed; left: 0; right: 0; bottom: 0; z-index: 30;
-  /* iOS 26 standalone: the layout viewport (dvh) ends ~62pt above the
-     physical bottom while 100vh (large viewport) reaches the screen edge.
-     bottom:0 pinned the bar to the short viewport and created the dead
-     strip (telemetry 2026-10-21: inner 812 vs screen 874). Push it down
-     by the letterbox gap; where dvh==vh this is 0 (no-op everywhere
-     else). Engines without dvh keep bottom:0 above. */
-  bottom: calc(100dvh - 100vh);
+  /* iOS 26 standalone (iPhone 18 Pro, telemetry 2026-10-21): the webview
+     is letterboxed 62pt above the physical bottom (vh 874 vs dvh 812) and
+     CLIPS content at 812 — the bar cannot extend into the system zone
+     (theme-color paints it instead). That letterbox already clears the
+     home indicator, so the env() inset must apply only to devices WITHOUT
+     a letterbox gap; otherwise it double-counts 34pt of empty bar under
+     the labels — the original "dead space". */
+  bottom: 0;
   display: flex;
   background: var(--surface);
   border-top: 1px solid var(--line);
-  padding-bottom: env(safe-area-inset-bottom);
+  padding-bottom: max(0px, calc(env(safe-area-inset-bottom) - 100vh + 100dvh));
 }
 /* iPhone 18 Pro / iOS 26 standalone: fixed bottom:0 pinned to a layout
    viewport ending ~100pt above the physical bottom, leaving a --bg dead
