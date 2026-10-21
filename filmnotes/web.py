@@ -3,16 +3,36 @@
 /api/* errors are always JSON, never an HTML 500. Input hygiene: _body()
 requires a JSON object (400 otherwise); _str()/_num() coerce and bound.
 """
+import hashlib
 import os
 from datetime import datetime
 
 from flask import Flask, jsonify, render_template, request
 
-from . import __version__, db
+from . import db
 
 MAX_NAME = 120
 MAX_NOTE = 5000
 THEMES = ("auto", "light", "dark")
+
+
+def _asset_version():
+    """Content hash of the static bundle, computed once at import.
+
+    iOS standalone caches aggressively and the stylesheet/script are linked
+    as ?v=<app_version>; a STATIC version string meant CSS edits never
+    reached installed PWAs (2026-10-21: the bottombar ::after skirt fix was
+    served stale and the user saw the dead-strip 'come back'). A content
+    hash busts the cache exactly when the bundle changes."""
+    static = os.path.join(os.path.dirname(__file__), "static")
+    h = hashlib.sha256()
+    for name in ("style.css", "app.js"):
+        try:
+            with open(os.path.join(static, name), "rb") as fh:
+                h.update(fh.read())
+        except OSError:
+            h.update(name.encode())  # missing file still yields a stable value
+    return h.hexdigest()[:12]
 
 
 def _body():
@@ -108,7 +128,7 @@ def create_app(db_path, conn=None):
     @app.route("/")
     def index():
         return render_template("index.html",
-                               app_version=__version__,
+                               app_version=_asset_version(),
                                settings=db.get_settings(conn))
 
     # ------------------------------------------------------------ rolls
