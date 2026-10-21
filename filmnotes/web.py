@@ -123,6 +123,17 @@ def create_app(db_path, conn=None):
     def _500(e):
         return jsonify(error="internal error"), 500
 
+    @app.after_request
+    def _no_cache_html(resp):
+        """The app-shell HTML must always revalidate. With no Cache-Control
+        iOS served a cached shell (and thus a cached manifest link + CSS
+        URL) for days — installed PWAs ignored deployed fixes even after
+        delete + re-add (2026-10-21). Hashed ?v= statics stay cacheable;
+        Flask's static already sends no-cache for the manifest."""
+        if resp.mimetype == "text/html":
+            resp.headers["Cache-Control"] = "no-cache, must-revalidate"
+        return resp
+
     # ------------------------------------------------------------ pages
 
     @app.route("/")
