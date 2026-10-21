@@ -29,10 +29,12 @@ installs to the home screen, and keeps everything on your own server.
   context; the date prefills from that roll's shot date). Re-adding a
   place to the same roll updates its entry instead of duplicating it.
   With no rolls yet the location is created standalone.
-- **Edit pencils** — every roll card and every location card has a pencil
-  to fix a mistake (camera, film, dates, notes, place name). Each
-  location entry under a roll has its own pencil for the entry note and
-  visit date.
+- **Edit pencils** — hidden by default to keep things uncluttered. The
+  pencil button in the top bar (left of the cog) toggles edit mode; while
+  it's on, every roll card and location card shows a pencil to fix a
+  mistake (camera, film, dates, notes, place name), and each location
+  entry under a roll gets its own pencil for the entry note and visit
+  date.
 - **Maps links** — tap a location name to open Google Maps. If the
   backend has coordinates (captured when you used the location detect
   button) it links straight to the spot; otherwise it falls back to a

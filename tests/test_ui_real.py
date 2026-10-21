@@ -296,6 +296,28 @@ def test_roll_modal_keeps_bottombar_visible(browser, server):
     page.context.close()
 
 
+def test_edit_mode_toggle_hides_pencils(browser, server):
+    page = open_page(browser)
+    create_roll(page, "Leica MP", "Kodak Portra 400", "Quiet Cove")
+    # pencils hidden until the topbar pencil is pressed
+    assert not page.is_visible('[data-act="edit-roll"]')
+    page.click("#edit-mode-btn")
+    page.wait_for_selector("body.edit-mode")
+    assert page.is_visible('[data-act="edit-roll"]')
+    assert page.get_attribute("#edit-mode-btn", "aria-pressed") == "true"
+    # toggle back off
+    page.click("#edit-mode-btn")
+    page.wait_for_selector("body:not(.edit-mode)")
+    assert not page.is_visible('[data-act="edit-roll"]')
+    assert page.get_attribute("#edit-mode-btn", "aria-pressed") == "false"
+    # and edit mode persists across page navigation (body class lives on)
+    page.click("#edit-mode-btn")
+    goto_page(page, "locations")
+    assert page.is_visible('[data-act="edit-loc"]')
+    assert page.errors == []
+    page.context.close()
+
+
 def test_escape_closes_popovers(browser, server):
     page = open_page(browser)
     for btn, modal in (("#new-roll-btn", "#roll-modal"),
@@ -409,6 +431,7 @@ def test_edit_roll_via_pencil(browser, server):
     page = open_page(browser, viewport=MOBILE)
     create_roll(page, "Leica MP", "Kodak Portra 400", "Cedar Sink",
                 note="wrong film")
+    page.click("#edit-mode-btn")
     page.click('[data-act="edit-roll"]')
     page.wait_for_selector("#roll-modal:visible")
     assert page.inner_text("#roll-title") == "Edit Roll"
@@ -430,6 +453,7 @@ def test_edit_location_and_entry_via_pencils(browser, server):
     create_roll(page, "Bronica SQ-A", "Fujifilm Provia 100", "Cedar Sink")
     # rename the place (typo fix scenario)
     goto_page(page, "locations")
+    page.click("#edit-mode-btn")
     page.click('[data-act="edit-loc"]')
     page.wait_for_selector("#loc-modal:visible")
     assert page.inner_text("#loc-title") == "Edit Location"

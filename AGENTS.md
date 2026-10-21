@@ -70,6 +70,12 @@ the ui tier fails with "Executable doesn't exist" and you must
 - **Flask + SQLite (WAL) + vanilla JS, no build step** — matches rssgate,
   which the user runs on their tailnet. One process, one file of JS, one
   stylesheet.
+- **Edit pencils are gated behind an edit mode toggle** (topbar
+  `#edit-mode-btn`, toggles `body.edit-mode`). The per-card pencils use
+  `visibility: hidden` by default, NOT `display: none` — that keeps the
+  "only two display:none rules" UI contract intact and preserves card
+  layout (padding-right is reserved). Editing is rare; default view is
+  clean.
 - **Edit pencils reuse the create modals** (app.js `edit` context var:
   {kind:'roll'|'loc'|'entry'}): roll edit hides the location group, loc
   edit hides the current-roll banner, and a third small modal

@@ -451,6 +451,13 @@ function syncThemeSeg() {
 document.querySelectorAll(".modal").forEach((m) =>
   m.addEventListener("click", (e) => { if (e.target === m) closeModal(m.id); }));
 
+/* edit mode: topbar pencil reveals the per-card edit pencils */
+$("edit-mode-btn").addEventListener("click", () => {
+  const on = document.body.classList.toggle("edit-mode");
+  $("edit-mode-btn").classList.toggle("active", on);
+  $("edit-mode-btn").setAttribute("aria-pressed", on ? "true" : "false");
+});
+
 /* Escape dismisses the topmost popover (and the drawer) */
 document.addEventListener("keydown", (e) => {
   if (e.key !== "Escape") return;
