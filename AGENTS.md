@@ -61,7 +61,10 @@ python3 -m venv .venv && .venv/bin/pip install -r requirements.txt \
 #   scripts/serve-loop.sh    respawns the server if it dies; adopt-guard
 #                            skips launch when 8961 is already served
 #   setsid nohup scripts/serve-loop.sh >/dev/null 2>&1 &   (manual start)
-#   /etc/profile.d/zz-ensure-filmnotes.sh starts the loop at every login
+#   /etc/profile.d/zz-ensure-filmnotes.sh starts the loop at every login;
+#   cron (*/5) re-runs that same ensure script so the loop resurrects even
+#   between logins (three layers: loop->server ~3s, cron->loop <=5min,
+#   login->everything)
 # Why: a setsid'd server orphaned to ppid=1 keeps getting killed on this
 # box (observed repeatedly); a live parent loop is the proven-surviving
 # topology (rssgate/sparky pattern). Verify with ss -tlnp, NOT pgrep -f
