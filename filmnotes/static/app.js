@@ -712,7 +712,12 @@ function applyTheme(theme) {
   const dark = theme === "dark" ||
     (theme === "auto" && matchMedia("(prefers-color-scheme: dark)").matches);
   const meta = document.querySelector('meta[name="theme-color"]');
-  if (meta) meta.content = dark ? "#141312" : "#f4f2ee";
+  // Must match the server-rendered value in index.html: iOS paints the
+  // outside-webview zone (the standalone app's webview is letterboxed
+  // ~62pt above the physical bottom) from theme-color, so it has to be
+  // the BOTTOM BAR colour, not the page bg — the bar then reads as
+  // reaching the screen edge (iPhone 18 Pro dead-strip, 2026-10-21).
+  if (meta) meta.content = dark ? "#1e1c1a" : "#ffffff";
 }
 matchMedia("(prefers-color-scheme: dark)").addEventListener?.("change", () => {
   if (state.theme === "auto") applyTheme("auto");
