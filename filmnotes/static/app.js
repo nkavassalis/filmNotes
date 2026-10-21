@@ -114,7 +114,7 @@ function renderRolls(view) {
               aria-label="Edit roll" title="Edit roll">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h4L20 8l-4-4L4 16v4z"/><path d="M13.5 6.5l4 4"/></svg>
       </button>
-      <h3>Roll #${r.id} <span class="meta">· ${esc(fmtDT(r.shot_at))}</span></h3>
+      <h3>Roll #${esc(r.roll_no)} <span class="meta">· ${esc(fmtDT(r.shot_at))}</span></h3>
       <div class="chips">
         <span class="chip">${esc(r.camera)}</span>
         <span class="chip">${esc(r.film)}</span>
@@ -148,7 +148,7 @@ function renderLocations(view) {
       <div class="meta">${l.rolls.length} roll${l.rolls.length === 1 ? "" : "s"} · visited ${esc(fmtDT(l.visited_at))}</div>
       ${l.note ? `<p class="note">${esc(l.note)}</p>` : ""}
       ${l.rolls.length ? `<ul class="sublist">` + l.rolls.map((r) => `
-        <li><b>Roll #${r.id}</b> <span class="meta">${esc(fmtDT(r.visited_at))} · ${esc(r.camera)} · ${esc(r.film)}</span>
+        <li><b>Roll #${esc(r.roll_no)}</b> <span class="meta">${esc(fmtDT(r.visited_at))} · ${esc(r.camera)} · ${esc(r.film)}</span>
         ${r.note ? `<span class="meta">${esc(r.note)}</span>` : ""}</li>`).join("") + `</ul>` : ""}
     </article>`).join("");
 }
@@ -251,6 +251,7 @@ $("new-roll-btn").addEventListener("click", async () => {
   fillSelect($("roll-film"), mruSort(state.films));
   fillDatalist();
   $("roll-note").value = "";
+  $("roll-no").value = "";
   $("roll-shot").value = dtLocalNow();
   state.lastFix = null;
   if (!$("roll-location").value.trim()) suggestLocation();
@@ -261,6 +262,7 @@ $("new-roll-btn").addEventListener("click", async () => {
 function openRollEdit(roll) {
   fillSelect($("roll-camera"), mruSort(state.cameras));
   fillSelect($("roll-film"), mruSort(state.films));
+  $("roll-no").value = roll.roll_no || "";
   const cam = state.cameras.find((c) => c.name === roll.camera);
   const film = state.films.find((f) => f.name === roll.film);
   if (cam) $("roll-camera").value = String(cam.id);
@@ -276,7 +278,10 @@ $("roll-cancel").addEventListener("click", () => closeModal("roll-modal"));
 $("roll-save").addEventListener("click", async () => {
   try {
     if (edit && edit.kind === "roll") {
+      const rollNo = $("roll-no").value.trim();
+      if (!rollNo) { toast("Roll number is required when editing"); return; }
       await api(`/api/rolls/${edit.id}`, { method: "PUT", body: {
+        roll_no: rollNo,
         camera_id: Number($("roll-camera").value),
         film_id: Number($("roll-film").value),
         shot_at: $("roll-shot").value,
@@ -293,6 +298,8 @@ $("roll-save").addEventListener("click", async () => {
       note: $("roll-note").value.trim(),
       shot_at: $("roll-shot").value,
     };
+    const rn = $("roll-no").value.trim();
+    if (rn) body.roll_no = rn;
     if (!body.location_name) { toast("Location is required"); return; }
     if (state.lastFix) { body.lat = state.lastFix.lat; body.lon = state.lastFix.lon; }
     await api("/api/rolls", { method: "POST", body });
@@ -320,7 +327,7 @@ $("new-location-btn").addEventListener("click", async () => {
     fillDatalist();
     $("loc-current").innerHTML = cur.current
       ? `Current camera: <b>${esc(cur.current.camera)}</b> · Current roll: ` +
-        `<b>#${cur.current.id}</b> (${esc(cur.current.film)}, ${esc(fmtDT(cur.current.shot_at))})`
+        `<b>#${esc(cur.current.roll_no)}</b> (${esc(cur.current.film)}, ${esc(fmtDT(cur.current.shot_at))})`
       : `No rolls yet — the current camera and roll will appear here.`;
     $("loc-name").value = "";
     $("loc-note").value = "";
@@ -347,7 +354,7 @@ function openEntryEdit(rollId, locId) {
   const roll = state.rolls.find((r) => r.id === rollId);
   const entry = roll && (roll.locations || []).find((l) => l.id === locId);
   if (!entry) return;
-  $("entry-place").innerHTML = `Roll #${rollId} · <b>${esc(entry.name)}</b>`;
+  $("entry-place").innerHTML = `Roll #${esc(roll.roll_no)} · <b>${esc(entry.name)}</b>`;
   $("entry-shot").value = (entry.visited_at || roll.shot_at || "").replace(" ", "T");
   $("entry-note").value = entry.note || "";
   edit = { kind: "entry", rollId, locId };
@@ -392,7 +399,7 @@ $("loc-save").addEventListener("click", async () => {
     location.hash = "#/locations";
     route();
     toast(saved.attached_to_roll != null
-      ? `Location added to Roll #${saved.attached_to_roll}` : "Location saved");
+      ? `Location added to Roll #${saved.attached_to_roll_no}` : "Location saved");
   } catch (e) { toast(e.message); }
 });
 

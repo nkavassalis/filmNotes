@@ -46,7 +46,8 @@ tests/
   test_api.py              API contract + input hygiene fuzz
   test_ui_contract.py      static JS<->template<->CSS contract
   test_ui_real.py          Playwright + headless Chromium (mark: ui)
-  screenshots/             written by the ui tier; safe to delete
+  test_backup_scripts.py   backup.sh / init_db.py round-trips (hermetic)
+  screenshots/             written by the ui tier; GITIGNORED (see guardrails)
 README.md                  end users        AGENTS.md      agents (this file)
 ```
 
@@ -96,6 +97,20 @@ the ui tier fails with "Executable doesn't exist" and you must
 - **show_times setting** ("0"/"1", default "0"): the time is ALWAYS
   collected and stored; the toggle only changes fmtDT's display. Stored
   like theme (server-side, shared across devices).
+- **roll_no is the user-visible number; id stays the internal key.**
+  Auto-numbering = the row id as text (assigned in add_roll right after
+  insert), so it continues on its own; users may set a custom number at
+  creation or renumber later via the edit modal. UNIQUE index +
+  db.roll_no_taken() pre-check (web layer returns a friendly 400 "that
+  roll number is already in use"); the edit check excludes the roll's own
+  id so saving your own number is fine. All UI display uses roll_no;
+  data-act/data-id attributes and API paths use id. Never render r.id to
+  the user.
+- **Backups use the SQLite online-backup API** (scripts/backup.sh), never
+  cp of a live WAL db; snapshots are gzipped, integrity-checked, and
+  pruned to the newest 16. Weekly cron is INSTALLED on the user's box
+  (crontab -l to inspect; log at backups/backup.log). The user's live
+  database is precious — stop the server before any restore.
 - **Rolls accumulate locations (many-to-many)** via `roll_locations(roll_id,
   location_id, note, visited_at)`. This is the user's mental model and the
   original spec ("rolls with EACH location under it"): **New Location

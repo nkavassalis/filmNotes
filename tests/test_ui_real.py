@@ -89,8 +89,13 @@ def open_page(browser, viewport=DESKTOP, shot_tag="", **ctx_kwargs):
     page = ctx.new_page()
     errors = []
     page.on("pageerror", lambda e: errors.append(str(e)))
+    # "Failed to load resource" lines are expected when tests exercise 4xx
+    # validation paths; real server faults are caught via the response hook.
     page.on("console", lambda m: errors.append(m.text)
-            if m.type == "error" else None)
+            if m.type == "error" and "Failed to load resource" not in m.text
+            else None)
+    page.on("response", lambda r: errors.append(f"HTTP {r.status} {r.url}")
+            if r.status >= 500 else None)
     page.goto(BASE)
     page.wait_for_selector("#bottombar:visible")
     page.errors = errors
@@ -229,9 +234,12 @@ def goto_page(page, name):
     page.wait_for_selector(f"h1.page-title:has-text('{name.capitalize()}')")
 
 
-def create_roll(page, camera, film, location, note="", shot=None, count=1):
+def create_roll(page, camera, film, location, note="", shot=None, count=1,
+                roll_no=None):
     page.click("#new-roll-btn")
     page.wait_for_selector("#roll-modal:visible")
+    if roll_no is not None:
+        page.fill("#roll-no", roll_no)
     page.select_option("#roll-camera", label=camera)
     page.select_option("#roll-film", label=film)
     page.fill("#roll-location", location)
@@ -293,6 +301,33 @@ def test_roll_modal_keeps_bottombar_visible(browser, server):
     page.click("#new-roll-btn")
     page.wait_for_selector("#roll-modal:visible")
     assert page.is_visible("#bottombar")
+    page.context.close()
+
+
+def test_custom_roll_numbers_ui(browser, server):
+    page = open_page(browser, viewport=MOBILE)
+    create_roll(page, "Leica MP", "Kodak Portra 400", "Pier",
+                roll_no="24A", count=1)
+    assert "Roll #24A" in page.inner_text("#view")
+    create_roll(page, "Leica M6", "Ilford HP5 400", "Dune",
+                count=2)  # blank -> auto
+    assert "Roll #2" in page.inner_text("#view")
+    # renumber via the edit modal; taken numbers are refused
+    page.click("#edit-mode-btn")
+    page.click('[data-act="edit-roll"]')  # first card = Roll #2
+    page.wait_for_selector("#roll-modal:visible")
+    assert page.input_value("#roll-no") == "2"
+    page.fill("#roll-no", "24A")
+    page.click("#roll-save")
+    page.wait_for_selector("#toast:visible")
+    assert "already in use" in page.inner_text("#toast")
+    assert page.is_visible("#roll-modal")  # still open, nothing lost
+    page.fill("#roll-no", "73-C")
+    page.click("#roll-save")
+    page.wait_for_selector("#roll-modal", state="hidden")
+    page.wait_for_selector("text=Roll #73-C")
+    assert "Roll #24A" in page.inner_text("#view")
+    assert page.errors == []
     page.context.close()
 
 

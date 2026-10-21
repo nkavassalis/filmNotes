@@ -10,6 +10,8 @@ installs to the home screen, and keeps everything on your own server.
 - **Rolls** — every roll you log: camera, film, shot date, optional note.
   Sorted by shot date, newest first. **All the locations that roll was
   shot at are listed under it**, each with its own note and visit time.
+  Roll numbers auto-increment, but you can set a custom one (e.g. `24A`)
+  at creation or renumber an old roll later — taken numbers are refused.
 - **Locations** — every place you've shot, with **every roll shot there
   listed under it**, sorted by visit date, newest first.
 - **Cameras / Film** — the gear lists that feed the New Roll dropdowns.
@@ -98,10 +100,37 @@ drives headless Chromium: computed styles, element geometry, touch
 gestures, geolocation (stubbed), console-error capture. Screenshots land
 in `tests/screenshots/`. It expects port 8961 to be free.
 
+## Backup & init
+
+`scripts/backup.sh` takes a consistent, gzipped snapshot of the database
+using the SQLite online-backup API (safe while the server is serving —
+never `cp` a live WAL database) and verifies the snapshot's integrity.
+`scripts/init_db.py` creates a fresh seeded database or restores one from
+a backup.
+
+```
+scripts/backup.sh                     # -> backups/filmnotes-<stamp>.sqlite.gz
+scripts/init_db.py                    # create/verify data/filmnotes.sqlite
+scripts/init_db.py --from-backup backups/filmnotes-2026-01-01_0300.sqlite.gz \
+                   --db data/filmnotes.sqlite --force      # restore (stop server first)
+```
+
+Retention: the newest **16** backups are kept (weekly cron = ~4 months).
+Override with `FILMNOTES_BACKUP_KEEP`; the database and output directory
+with `FILMNOTES_DB` / `FILMNOTES_BACKUP_DIR`.
+
+Weekly cron — add with `crontab -e` (substitute your real install path):
+
+```
+0 3 * * 0 /path/to/filmNotes/scripts/backup.sh >> /path/to/filmNotes/backups/backup.log 2>&1
+```
+
 ## Layout
 
 ```
 run.py                    entry point (config -> db -> flask)
+scripts/backup.sh         weekly WAL-safe backup + verify + prune (see above)
+scripts/init_db.py        create/verify/restore the database
 filmnotes/
   db.py                   ALL SQL: schema, seeds, queries
   web.py                  Flask app, thin routes, JSON-only errors

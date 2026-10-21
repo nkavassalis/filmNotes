@@ -362,3 +362,52 @@ def test_settings_show_times(client):
                                json={"show_times": "1"}))["show_times"] == "1"
     r = client.put("/api/settings", json={"show_times": "maybe"})
     assert r.status_code == 400
+
+
+# ---------------------------------------------------------------- roll numbers
+
+def test_roll_number_auto_and_custom(client):
+    r1 = _mk_roll(client)
+    assert r1["roll_no"] == str(r1["id"])
+    r2 = _mk_roll(client, roll_no="24A")
+    assert r2["roll_no"] == "24A"
+    rolls = {r["id"]: r for r in get_json(client.get("/api/rolls"))}
+    assert rolls[r1["id"]]["roll_no"] == str(r1["id"])
+    assert rolls[r2["id"]]["roll_no"] == "24A"
+
+
+def test_roll_number_duplicates_rejected(client):
+    a = _mk_roll(client, roll_no="7")
+    r = client.post("/api/rolls", json={"camera_id": 1, "film_id": 1,
+                                        "location_name": "x",
+                                        "roll_no": "7"})
+    assert r.status_code == 400
+    assert "roll number" in get_json(r)["error"]
+    # renumbering TO an taken number is rejected too...
+    b = _mk_roll(client, roll_no="8")
+    r = client.put(f"/api/rolls/{b['id']}", json={"roll_no": "7"})
+    assert r.status_code == 400 and "roll number" in get_json(r)["error"]
+    # ...but keeping your own number is fine (self-exclusion)
+    r = client.put(f"/api/rolls/{b['id']}", json={"roll_no": "8", "note": "n"})
+    assert r.status_code == 200
+    # and renumbering to a free number works
+    r = client.put(f"/api/rolls/{b['id']}", json={"roll_no": "1972-B"})
+    assert r.status_code == 200 and get_json(r)["roll_no"] == "1972-B"
+
+
+def test_roll_number_validation(client):
+    r = client.post("/api/rolls", json={"camera_id": 1, "film_id": 1,
+                                        "location_name": "x",
+                                        "roll_no": "x" * 21})
+    assert r.status_code == 400
+    roll = _mk_roll(client)
+    r = client.put(f"/api/rolls/{roll['id']}", json={"roll_no": "   "})
+    assert r.status_code == 400
+
+
+def test_location_attach_toast_uses_roll_no(client):
+    _mk_roll(client, roll_no="55")
+    r = client.post("/api/locations", json={"name": "Inlet"})
+    loc = get_json(r)
+    assert loc["attached_to_roll"] is not None
+    assert loc["attached_to_roll_no"] == "55"

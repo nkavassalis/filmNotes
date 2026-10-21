@@ -8,3 +8,4 @@ config.yaml
 filmnotes.log
 .env*
 tests/screenshots/
+backups/

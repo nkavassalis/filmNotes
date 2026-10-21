@@ -1,5 +1,7 @@
 """Hermetic DB tests: seeding, CRUD, MRU data, current roll, settings,
-shot/visit dates, migration."""
+shot/visit dates, roll numbers, migration."""
+import sqlite3
+
 from filmnotes import db
 
 
@@ -50,9 +52,49 @@ def test_add_roll_and_listing(conn):
     roll = db.add_roll(conn, cam, film, loc["id"], "f/8 sunny")
     rolls = db.list_rolls(conn)
     assert rolls[0]["id"] == roll["id"]
+    assert rolls[0]["roll_no"] == str(roll["id"])   # auto = row id
     assert rolls[0]["locations"][0]["name"] == "Golden Gate Park"
     assert rolls[0]["note"] == "f/8 sunny"
     assert rolls[0]["camera"] and rolls[0]["film"]
+
+
+def test_custom_roll_numbers(conn):
+    cam = db.list_cameras(conn)[0]["id"]
+    film = db.list_films(conn)[0]["id"]
+    loc = db.add_location(conn, "Home")
+    a = db.add_roll(conn, cam, film, loc["id"], roll_no="12A")
+    b = db.add_roll(conn, cam, film, loc["id"])      # auto continues
+    assert a["roll_no"] == "12A"
+    assert b["roll_no"] == str(b["id"])
+    # renumber old rolls
+    db.update_roll(conn, b["id"], {"roll_no": "7"})
+    nos = sorted(r["roll_no"] for r in db.list_rolls(conn))
+    assert nos == ["12A", "7"]
+    assert db.roll_no_taken(conn, "12A")
+    assert not db.roll_no_taken(conn, "12A", exclude_id=a["id"])
+    assert not db.roll_no_taken(conn, "999")
+
+
+def test_roll_no_unique_index(conn):
+    cam = db.list_cameras(conn)[0]["id"]
+    film = db.list_films(conn)[0]["id"]
+    loc = db.add_location(conn, "Home")
+    db.add_roll(conn, cam, film, loc["id"], roll_no="X1")
+    import pytest
+    with pytest.raises(sqlite3.IntegrityError):
+        db.add_roll(conn, cam, film, loc["id"], roll_no="X1")
+
+
+def test_migrate_backfills_roll_no(conn):
+    cam = db.list_cameras(conn)[0]["id"]
+    film = db.list_films(conn)[0]["id"]
+    loc = db.add_location(conn, "Legacy")
+    roll = db.add_roll(conn, cam, film, loc["id"])
+    conn.execute("DROP INDEX IF EXISTS idx_rolls_roll_no")
+    conn.execute("ALTER TABLE rolls DROP COLUMN roll_no")
+    db.init_db(conn)
+    r = db.list_rolls(conn)[0]
+    assert r["roll_no"] == str(roll["id"])
 
 
 def test_roll_accumulates_locations(conn):

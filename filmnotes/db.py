@@ -55,6 +55,7 @@ CREATE TABLE IF NOT EXISTS locations (
 );
 CREATE TABLE IF NOT EXISTS rolls (
   id          INTEGER PRIMARY KEY,
+  roll_no     TEXT NOT NULL DEFAULT '',
   camera_id   INTEGER NOT NULL REFERENCES cameras(id),
   film_id     INTEGER NOT NULL REFERENCES films(id),
   note        TEXT NOT NULL DEFAULT '',
@@ -120,6 +121,12 @@ def _migrate(conn):
             "AND EXISTS (SELECT 1 FROM locations l WHERE l.id = r.location_id)")
         conn.execute("DROP INDEX IF EXISTS idx_rolls_location")
         conn.execute("ALTER TABLE rolls DROP COLUMN location_id")
+    # v0.5: user-visible roll number (auto = the row id, editable).
+    if "roll_no" not in cols("rolls"):
+        conn.execute("ALTER TABLE rolls ADD COLUMN roll_no TEXT NOT NULL DEFAULT ''")
+        conn.execute("UPDATE rolls SET roll_no = CAST(id AS TEXT) WHERE roll_no = ''")
+    conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_rolls_roll_no "
+                 "ON rolls(roll_no)")
 
 
 def init_db(conn):
@@ -225,7 +232,7 @@ def list_locations(conn):
     for loc in conn.execute(
             "SELECT * FROM locations ORDER BY visited_at DESC, id DESC"):
         rolls = [dict(r) for r in conn.execute(
-            """SELECT r.id, r.shot_at, rl.note, rl.visited_at,
+            """SELECT r.id, r.roll_no, r.shot_at, rl.note, rl.visited_at,
                       c.name AS camera, f.name AS film
                FROM roll_locations rl
                JOIN rolls   r ON r.id = rl.roll_id
@@ -316,7 +323,7 @@ def list_rolls(conn):
     note is the roll-at-that-place note.
     """
     rolls = [dict(r) for r in conn.execute(
-        """SELECT r.id, r.note, r.shot_at, r.created_at,
+        """SELECT r.id, r.roll_no, r.note, r.shot_at, r.created_at,
                   c.name AS camera, f.name AS film
            FROM rolls r
            JOIN cameras c ON c.id = r.camera_id
@@ -332,17 +339,26 @@ def list_rolls(conn):
     return rolls
 
 
-def add_roll(conn, camera_id, film_id, location_id, note="", shot_at=None):
-    """Create a roll and link its first location (New Roll popover)."""
+def add_roll(conn, camera_id, film_id, location_id, note="", shot_at=None,
+             roll_no=None):
+    """Create a roll and link its first location (New Roll popover).
+
+    roll_no is the user-visible number; blank/None means auto (the row id,
+    so numbering continues on its own). Uniqueness is enforced by a UNIQUE
+    index plus a friendly pre-check in the web layer.
+    """
     shot_at = shot_at or now_local()
     if conn.execute("SELECT 1 FROM locations WHERE id=?",
                     (location_id,)).fetchone() is None:
         raise ValueError("unknown location_id")
     cur = conn.execute(
-        "INSERT INTO rolls(camera_id, film_id, note, shot_at, created_at) "
-        "VALUES (?,?,?,?,?)",
-        (camera_id, film_id, note, shot_at, now()))
+        "INSERT INTO rolls(roll_no, camera_id, film_id, note, shot_at, "
+        "created_at) VALUES (?,?,?,?,?,?)",
+        (roll_no or "", camera_id, film_id, note, shot_at, now()))
     roll_id = cur.lastrowid
+    if not roll_no:
+        conn.execute("UPDATE rolls SET roll_no=? WHERE id=?",
+                     (str(roll_id), roll_id))
     conn.execute(
         "INSERT INTO roll_locations(roll_id, location_id, note, visited_at) "
         "VALUES (?,?,?,?)", (roll_id, location_id, "", shot_at))
@@ -365,7 +381,7 @@ def current_roll(conn):
     camera and roll.
     """
     row = conn.execute(
-        """SELECT r.id, r.shot_at, c.name AS camera, f.name AS film
+        """SELECT r.id, r.roll_no, r.shot_at, c.name AS camera, f.name AS film
            FROM rolls r
            JOIN cameras c ON c.id = r.camera_id
            JOIN films   f ON f.id = r.film_id
@@ -389,8 +405,15 @@ def _apply_update(conn, table, id_col, id_val, patch):
 
 
 def update_roll(conn, roll_id, patch):
-    """patch keys: camera_id, film_id, note, shot_at (already validated)."""
+    """patch keys: camera_id, film_id, note, shot_at, roll_no (validated)."""
     return _apply_update(conn, "rolls", "id", roll_id, patch)
+
+
+def roll_no_taken(conn, roll_no, exclude_id=None):
+    row = conn.execute(
+        "SELECT id FROM rolls WHERE roll_no=? AND id != ?",
+        (roll_no, exclude_id or -1)).fetchone()
+    return row is not None
 
 
 def update_location(conn, location_id, patch):

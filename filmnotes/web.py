@@ -129,6 +129,9 @@ def create_app(db_path, conn=None):
             raise BadRequest("unknown film_id")
         note = _note(data)
         shot_at = _datetime(data, "shot_at")
+        roll_no = _str(data, "roll_no", max_len=20)
+        if roll_no and db.roll_no_taken(conn, roll_no):
+            raise BadRequest("that roll number is already in use")
         if data.get("location_id") is not None:
             loc = db.get_location(conn, data["location_id"])
             if loc is None:
@@ -139,7 +142,7 @@ def create_app(db_path, conn=None):
             loc = db.get_or_create_location(
                 conn, name, _num(data, "lat"), _num(data, "lon"), shot_at)
         roll = db.add_roll(conn, data["camera_id"], data["film_id"],
-                           loc["id"], note, shot_at)
+                           loc["id"], note, shot_at, roll_no or None)
         return jsonify(roll), 201
 
     # ------------------------------------------------------------ locations
@@ -176,6 +179,7 @@ def create_app(db_path, conn=None):
             conn.commit()
         loc = dict(db.get_location(conn, loc["id"]))
         loc["attached_to_roll"] = attached
+        loc["attached_to_roll_no"] = cur["roll_no"] if attached else None
         return jsonify(loc), 201
 
     # ------------------------------------------------------------ cameras
@@ -224,6 +228,11 @@ def create_app(db_path, conn=None):
             patch["shot_at"] = _datetime(data, "shot_at")
         if "note" in data:
             patch["note"] = _note(data)
+        if "roll_no" in data:
+            rn = _str(data, "roll_no", required=True, max_len=20)
+            if db.roll_no_taken(conn, rn, exclude_id=roll_id):
+                raise BadRequest("that roll number is already in use")
+            patch["roll_no"] = rn
         if not patch:
             raise BadRequest("no known fields in body")
         return jsonify(db.update_roll(conn, roll_id, patch))
