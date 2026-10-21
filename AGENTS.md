@@ -347,6 +347,14 @@ the ui tier fails with "Executable doesn't exist" and you must
   the Locations page on the 18 Pro after reinstalling/refreshing.**
 - Geolocation *denial* UX (permission prompt dismissed) shows the toast
   fallback; only the success and network-failure paths are automated.
+- **Incident 2026-10-21:** two broken `-m ui` runs (before the fixture's
+  identity check existed) wrote test rolls/lenses/locations into the REAL
+  db while the watchdog held the port; MRU then surfaced gear the user
+  never used. Cleaned by hand (rolls 8-16, lenses 7-9, camera 'Contax T2',
+  film 'Cinestill 800T', locations 8-14); pre-cleanup backup
+  `filmnotes-2026-10-21_1333.sqlite.gz`. The `.no-serve` flag + fresh-db
+  identity assertion in the ui fixture prevent recurrence — never weaken
+  them.
 - Multi-device theme sync is verified only via reload on one context.
 
 ## Do-not-touch list
