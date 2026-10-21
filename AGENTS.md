@@ -168,6 +168,19 @@ the ui tier fails with "Executable doesn't exist" and you must
   three rules in the CSS may set `display: none` (the `[hidden]`
   contract, the settings-open bottombar, and `.add-loc`) — if you need
   another, update the spec and the test together.
+- **Bottom bar is `position: fixed; bottom: 0`** (not a flex child).
+  iOS standalone regression: as a flex child of a `100dvh` body, dvh can
+  undershoot the real webview height and leave a page-bg strip under the
+  bar (html bg fix alone was NOT enough — the strip's --bg vs the bar's
+  --surface still read as a gap). `#view` pads its bottom by
+  `var(--bottombar-h) + env(safe-area-inset-bottom)`; the bar itself
+  carries `padding-bottom: env(safe-area-inset-bottom)` with --surface bg
+  so it paints the home-indicator strip. z-index stack: bottombar 30 <
+  drawer 35 < modals 40 < toast 60. `test_ui_contract` pins the fixed
+  positioning; `test_bottombar_flush_with_viewport_bottom` pins geometry.
+- **MIT licensed** (LICENSE file, Copyright Nick Kavassalis); the
+  settings popover links to the public repo (`.repo-link`, target=_blank
+  so iOS standalone hands it to Safari — same pattern as maps links).
 - **MRU dropdown sorting** is done client-side (`mruSort`) from
   `used_count`/`last_used` supplied by `list_cameras`/`list_films`. Server
   returns alphabetical; UI owns ordering.

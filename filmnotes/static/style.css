@@ -113,7 +113,7 @@ svg { stroke: currentColor; fill: none; stroke-width: 1.8;
   overflow-y: auto;
   overscroll-behavior: contain;
   -webkit-overflow-scrolling: touch;
-  padding: 14px 14px 20px;
+  padding: 14px 14px calc(20px + var(--bottombar-h) + env(safe-area-inset-bottom));
   max-width: 760px;
   width: 100%;
   margin: 0 auto;
@@ -188,9 +188,13 @@ body.edit-mode .add-loc { display: block; }
 .add-loc:active { opacity: .55; }
 .sublist .meta { font-size: 12.5px; }
 
-/* ---- bottom bar ---- */
+/* ---- bottom bar ----
+   FIXED to the viewport bottom: in iOS standalone the bar was a flex
+   child of a 100dvh body, and dvh can undershoot the real webview
+   height, leaving a strip of page background under the bar. Fixed
+   positioning pins it to the physical bottom; #view pads for its height. */
 #bottombar {
-  flex: 0 0 auto;
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 30;
   display: flex;
   background: var(--surface);
   border-top: 1px solid var(--line);
@@ -222,7 +226,7 @@ body.settings-open #bottombar { display: none; }  /* spec: hidden only for setti
   border-right: 1px solid var(--line);
   transform: translateX(-100%);
   transition: transform 0.22s ease;
-  z-index: 30;
+  z-index: 35;   /* above the fixed bottom bar (30), below modals (40) */
   padding: calc(14px + env(safe-area-inset-top)) 0 calc(14px + env(safe-area-inset-bottom));
   display: flex; flex-direction: column;
 }
@@ -328,6 +332,11 @@ input:focus, select:focus, textarea:focus {
 .btn.ghost.icon svg { width: 21px; height: 21px; }
 .btn.ghost:active { color: var(--text); }
 .modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 20px; }
+
+/* repo link at the foot of the settings popover */
+.repo-link { text-align: center; margin: 14px 0 0; font-size: 13px; }
+.repo-link a { color: var(--muted); text-decoration: none; }
+.repo-link a:active { color: var(--accent); }
 
 /* add-row on cameras/film pages */
 .add-row { display: flex; gap: 8px; margin: 0 0 14px; }

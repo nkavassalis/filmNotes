@@ -766,3 +766,33 @@ def test_add_location_to_older_roll(browser, server):
     assert page.evaluate("location.hash") == "#/rolls"   # stayed on the page
     assert page.errors == []
     page.context.close()
+
+
+def test_bottombar_flush_with_viewport_bottom(browser, server):
+    # iOS standalone regression: bar is position:fixed bottom:0, so its
+    # bottom edge must sit exactly on the viewport bottom (no strip).
+    page = open_page(browser, viewport=MOBILE)
+    box = page.locator("#bottombar").bounding_box()
+    vh = page.evaluate("innerHeight")
+    assert abs(box["y"] + box["height"] - vh) < 1
+    # content clears the fixed bar (20px base + 62px bar + safe area)
+    pad = page.evaluate(
+        "getComputedStyle(document.getElementById('view'))"
+        ".paddingBottom")
+    assert float(pad.replace("px", "")) >= 80
+    assert page.errors == []
+    page.context.close()
+
+
+def test_settings_repo_link(browser, server):
+    page = open_page(browser, viewport=MOBILE)
+    page.click("#settings-btn")
+    page.wait_for_selector("#settings-modal:visible")
+    link = page.locator(".repo-link a")
+    assert link.is_visible()
+    assert link.get_attribute("href") == "https://github.com/nkavassalis/filmNotes"
+    assert link.get_attribute("target") == "_blank"
+    page.keyboard.press("Escape")
+    page.wait_for_selector("#settings-modal", state="hidden")
+    assert page.errors == []
+    page.context.close()

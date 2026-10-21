@@ -61,3 +61,17 @@ def test_bottombar_hidden_only_for_settings():
     # edit mode is off - user requirement)
     assert CSS.count("display: none") == 3
     assert ".add-loc" in CSS and "body.edit-mode .add-loc" in CSS
+
+
+def test_settings_links_to_repo():
+    assert 'href="https://github.com/nkavassalis/filmNotes"' in TEMPLATE
+    assert "repo-link" in CSS
+
+
+def test_bottombar_is_fixed_to_viewport_bottom():
+    # iOS standalone regression: the bar must be position:fixed bottom:0
+    # (a flex child of a 100dvh body leaves a strip under it on iOS)
+    block = re.search(r"#bottombar\s*\{([^}]*)\}", CSS).group(1)
+    assert "position: fixed" in block and "bottom: 0" in block
+    view_block = re.search(r"#view\s*\{([^}]*)\}", CSS).group(1)
+    assert "var(--bottombar-h)" in view_block   # content pads for the bar
