@@ -634,6 +634,39 @@ def test_location_detect_via_geolocation(browser, server):
     page.context.close()
 
 
+def test_location_detect_prefers_named_area(browser, server):
+    # Nominatim reverse only ever yields city/town; the app must instead
+    # surface the named conservation area via bounded search (2026-10-21).
+    import json as _json
+    page = open_page(
+        browser, viewport=MOBILE,
+        permissions=["geolocation"],
+        geolocation={"latitude": 43.79557, "longitude": -80.00882})
+
+    def nami(route):
+        url = route.request.url
+        if "/search" in url and "conservation" in url:
+            body = _json.dumps([{
+                "name": "Belfountain Conservation Area",
+                "display_name": "Belfountain Conservation Area, Caledon",
+                "lat": "43.79557", "lon": "-80.00882"}])
+        elif "/search" in url:
+            body = "[]"
+        else:
+            body = _json.dumps({"address": {"city": "Caledon",
+                                            "state": "Ontario"}})
+        route.fulfill(status=200, content_type="application/json", body=body)
+    page.route("**nominatim.openstreetmap.org**", nami)
+    page.click("#new-roll-btn")
+    page.wait_for_selector("#roll-modal:visible")
+    page.click("#roll-detect")
+    page.wait_for_function(
+        "document.getElementById('roll-location').value === "
+        "'Belfountain Conservation Area'", timeout=8000)
+    assert page.errors == []
+    page.context.close()
+
+
 def test_location_detect_failure_falls_back_to_coords(browser, server):
     page = open_page(
         browser, viewport=MOBILE,

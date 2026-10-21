@@ -254,10 +254,17 @@ the ui tier fails with "Executable doesn't exist" and you must
   `used_count`/`last_used` supplied by `list_cameras`/`list_films`. Server
   returns alphabetical; UI owns ordering.
 - **Location service** = browser geolocation in the client + OSM Nominatim
-  reverse geocode (client-side fetch). The server never sees coordinates
-  unless a new location is created with them. Any failure degrades to
-  "lat, lon" text; the field is ALWAYS an editable override (spec).
-  Tests stub geolocation and route-intercept Nominatim.
+  (client-side fetch). Detection first runs a bounded SEARCH for named
+  natural areas near the fix ("conservation area" → "nature reserve" →
+  "provincial park", first hit within 3.5 km wins) so you get "Belfountain
+  Conservation Area", not the nearest town — Nominatim REVERSE never
+  returns those polygons (verified 2026-10-21 at every zoom: roads,
+  hamlets, municipalities only; Overpass is_in was too slow to rely on).
+  No named area → reverse geocode city logic → raw "lat, lon". The server
+  never sees coordinates unless a new location is created with them. Any
+  failure degrades to "lat, lon" text; the field is ALWAYS an editable
+  override (spec). Tests stub geolocation and route-intercept Nominatim
+  (both /search and /reverse).
 - **Rolls create locations implicitly** by name (case-insensitive match,
   `get_or_create_location`). New Location modal shows the most recent roll
   as read-only "current camera / current roll" (`db.current_roll`,

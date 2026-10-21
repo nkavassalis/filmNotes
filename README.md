@@ -118,10 +118,12 @@ from your own machine — no public exposure, no accounts.
 
 Serve it over plain HTTP and everything works except the crosshair: iOS
 only exposes geolocation in secure contexts, so use HTTPS on the phone if
-you want location detection. The Nominatim reverse-geocode call runs from
-the *browser* (your phone), not the server, so the server itself needs no
-outbound access. If the phone can't reach nominatim.openstreetmap.org the
-field falls back to raw coordinates — you can always type the name.
+you want location detection. The Nominatim calls run from the *browser*
+(your phone), not the server, so the server itself needs no outbound
+access. Detection first looks for a named area around you — conservation
+area, nature reserve, provincial park — and falls back to the nearest
+town; if the phone can't reach nominatim.openstreetmap.org the field falls
+back to raw coordinates — you can always type the name.
 
 ## Running the tests
 

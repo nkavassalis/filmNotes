@@ -782,6 +782,43 @@ function suggestLocation() {
 
 /* ------------------------------------------------- location service */
 
+function haversine(lat1, lon1, lat2, lon2) {
+  const R = 6371000, rad = Math.PI / 180;
+  const dLat = (lat2 - lat1) * rad, dLon = (lon2 - lon1) * rad;
+  const a = Math.sin(dLat / 2) ** 2 +
+            Math.cos(lat1 * rad) * Math.cos(lat2 * rad) *
+            Math.sin(dLon / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(a));
+}
+
+/* Named natural area containing the fix ("Belfountain Conservation Area"
+   rather than "Rockwood"). Nominatim REVERSE never returns these polygons
+   (it prefers roads/hamlets/cities at every zoom, verified 2026-10-21), so
+   run a bounded SEARCH for the name patterns instead, first hit wins —
+   one request in the field, three in a city (rate-limit friendly). */
+async function nearbyAreaName(lat, lon) {
+  const d = 0.02, vb = `${lon - d},${lat - d},${lon + d},${lat + d}`;
+  let best = null;
+  for (const q of ["conservation area", "nature reserve", "provincial park"]) {
+    try {
+      const res = await fetch("https://nominatim.openstreetmap.org/search" +
+        "?format=jsonv2&q=" + encodeURIComponent(q) +
+        `&bounded=1&viewbox=${vb}&limit=3`,
+        { headers: { "Accept-Language": navigator.language || "en" } });
+      if (!res.ok) continue;
+      const rows = await res.json();
+      if (!Array.isArray(rows)) continue;
+      for (const g of rows) {
+        const dist = haversine(lat, lon, +g.lat, +g.lon);
+        if (dist < 3500 && (!best || dist < best.dist))
+          best = { name: g.name || g.display_name.split(",")[0], dist };
+      }
+      if (best) break;
+    } catch (e) { /* next term */ }
+  }
+  return best ? best.name : null;
+}
+
 async function detectLocation(input) {
   if (!navigator.geolocation) { toast("Geolocation unavailable"); return; }
   input.blur();
@@ -796,22 +833,26 @@ async function detectLocation(input) {
   }
   const lat = pos.coords.latitude, lon = pos.coords.longitude;
   state.lastFix = { lat, lon };
-  let name = `${lat.toFixed(4)}, ${lon.toFixed(4)}`;
-  try {
-    const res = await fetch("https://nominatim.openstreetmap.org/reverse" +
-      `?format=jsonv2&lat=${lat}&lon=${lon}&zoom=14`,
-      { headers: { "Accept-Language": navigator.language || "en" } });
-    if (res.ok) {
-      const g = await res.json();
-      const a = g.address || {};
-      const place = a.city || a.town || a.village || a.suburb || a.hamlet ||
-                    a.municipality || a.county;
-      const region = a.state || a.region;
-      if (place && region) name = `${place}, ${region}`;
-      else if (place) name = place;
-      else if (g.display_name) name = g.display_name.split(",").slice(0, 2).join(",").trim();
-    }
-  } catch (e) { /* keep coordinate fallback; override is always available */ }
+  let name = null;
+  try { name = await nearbyAreaName(lat, lon); } catch (e) { /* fallback */ }
+  if (!name) {
+    name = `${lat.toFixed(4)}, ${lon.toFixed(4)}`;
+    try {
+      const res = await fetch("https://nominatim.openstreetmap.org/reverse" +
+        `?format=jsonv2&lat=${lat}&lon=${lon}&zoom=14`,
+        { headers: { "Accept-Language": navigator.language || "en" } });
+      if (res.ok) {
+        const g = await res.json();
+        const a = g.address || {};
+        const place = a.city || a.town || a.village || a.suburb || a.hamlet ||
+                      a.municipality || a.county;
+        const region = a.state || a.region;
+        if (place && region) name = `${place}, ${region}`;
+        else if (place) name = place;
+        else if (g.display_name) name = g.display_name.split(",").slice(0, 2).join(",").trim();
+      }
+    } catch (e) { /* keep coordinate fallback; override is always available */ }
+  }
   input.value = name;
 }
 
