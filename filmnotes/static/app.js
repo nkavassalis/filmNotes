@@ -825,4 +825,36 @@ $("loc-detect").addEventListener("click", () => detectLocation($("loc-name")));
     await refreshData();
   } catch (e) { toast("Could not reach the server"); }
   route();
+  showDbg();  // TEMP 2026-10-21: iOS 18 Pro dead-strip diagnosis; remove after
 })();
+
+// TEMP 2026-10-21: geometry probe for the iOS standalone dead-strip hunt.
+// Reports what the webview actually sees vs the physical screen. REMOVE once
+// the strip is explained (Nick screenshots it once).
+function showDbg() {
+  const probe = document.createElement("div");
+  probe.style.cssText = "position:fixed;bottom:0;padding-bottom:" +
+    "env(safe-area-inset-bottom);visibility:hidden;pointer-events:none";
+  document.body.appendChild(probe);
+  const bar = document.getElementById("bottombar");
+  const box = document.createElement("div");
+  box.style.cssText = "position:fixed;top:4px;left:4px;z-index:9999;" +
+    "font:9px/1.3 monospace;color:#b4551f;background:rgba(0,0,0,.6);" +
+    "padding:3px 5px;border-radius:4px;pointer-events:none";
+  function paint() {
+    const sb = getComputedStyle(probe).paddingBottom;
+    const r = bar ? bar.getBoundingClientRect() : { bottom: -1 };
+    box.textContent = [
+      `screen ${screen.width}x${screen.height} dpr ${devicePixelRatio}`,
+      `inner ${innerWidth}x${innerHeight}`,
+      `vv ${Math.round(visualViewport.height)}`,
+      `bar.bottom ${Math.round(r.bottom)}`,
+      `safe-b ${sb}`,
+      `tc ${document.querySelector('meta[name=theme-color]')?.content}`,
+      `standalone ${matchMedia("(display-mode: standalone)").matches || navigator.standalone}`,
+    ].join(" | ");
+  }
+  document.body.appendChild(box);
+  paint();
+  addEventListener("resize", paint);
+}
