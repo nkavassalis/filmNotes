@@ -205,8 +205,22 @@ the ui tier fails with "Executable doesn't exist" and you must
   (fillLensSelect(cameraId)); the per-camera MRU default also respects
   compatibility. Lens cards show "All cameras" / "Fits: A, B"; the
   compatibility editor is a modal (#lens-modal) with aria-pressed
-  .chip-toggle buttons, opened by the edit-mode pencil (data-act=
-  "edit-lens").
+  .chip-toggle buttons. Opened by the lens card's ⓘ (data-act=
+  "info-lens") — NOT edit mode.
+- **Gear pages (Cameras, Film) do not use edit mode** (v0.9): route()
+  hides #edit-mode-btn on those pages (`page === "cameras" || page ===
+  "film"`). All gear management lives behind ⓘ popovers: camera →
+  #camera-info-modal (serial/note + compatible-lens roll-up + delete),
+  lens → #lens-modal (serial/note + compatibility chips + delete), film
+  → #film-modal (note + delete; films have no serial). Edit mode itself
+  still governs pencils/trash on Rolls & Locations only.
+- **Guarded gear deletes** (v0.9): DELETE /api/cameras|lenses|films
+  <id>. db.delete_camera/lens/film return True/False/None (deleted /
+  in-use / unknown); in-use = any roll references them (400 "rolls
+  still use this X - delete those rolls first"). Deleting a camera or
+  lens also cleans its lens_cameras rows. Roll history must never lose
+  its gear — do NOT relax these guards. Client: app.js deleteGear()
+  with native confirm().
 - **Inventory fields** (v0.8): `serial` + `note` (TEXT NOT NULL DEFAULT
   '') on cameras AND lenses (migration ALTERs both). PUT
   /api/cameras/<id> {serial?, note?}; PUT /api/lenses/<id> accepts

@@ -90,7 +90,7 @@ def test_drawer_has_no_pages_heading():
 
 def test_lens_compatibility_wiring():
     assert 'id="lens-modal"' in TEMPLATE and 'id="lens-cam-list"' in TEMPLATE
-    assert "edit-lens" in SCRIPT and "openLensEdit" in SCRIPT
+    assert "info-lens" in SCRIPT and "openLensEdit" in SCRIPT
     assert "chip-toggle" in CSS and "lensCompatible" in SCRIPT
 
 
@@ -99,3 +99,13 @@ def test_roll_modal_grid_and_inventory():
     assert 'id="camera-info-modal"' in TEMPLATE
     assert "info-camera" in SCRIPT and "openCameraInfo" in SCRIPT
     assert "lens-serial" in TEMPLATE and "camera-serial" in TEMPLATE
+
+
+def test_gear_pages_drop_edit_mode():
+    # the toggle is hidden on cameras/film; gear uses info popovers
+    assert 'page === "cameras" || page === "film"' in SCRIPT
+    assert 'id="film-modal"' in TEMPLATE
+    assert "info-film" in SCRIPT and "openFilmInfo" in SCRIPT
+    assert "btn.danger" in CSS
+    for btn in ("camera-info-delete", "lens-delete", "film-delete"):
+        assert f'id="{btn}"' in TEMPLATE

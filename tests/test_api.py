@@ -590,3 +590,33 @@ def test_lens_inventory_api(client):
     assert out["camera_ids"] == [] and out["serial"] == "" and out["note"] == "hazy"
     assert client.put(f"/api/lenses/{lens['id']}", json={}).status_code == 400
     assert client.put("/api/lenses/99999", json={"serial": "x"}).status_code == 404
+
+
+# ------------------------------------------------- guarded gear deletes
+
+def test_gear_delete_endpoints(client):
+    _mk_roll(client)          # uses camera_id 1 and film_id 1 (in use)
+    r = client.delete("/api/cameras/1")
+    assert r.status_code == 400 and "rolls still use" in get_json(r)["error"]
+    assert client.delete("/api/films/1").status_code == 400
+    lens = get_json(client.post("/api/lenses", json={"name": "50"}))
+    assert client.delete(f"/api/lenses/{lens['id']}").status_code == 200
+    # spare camera/film delete fine
+    spare_cam = get_json(client.post("/api/cameras", json={"name": "Zenit"}))
+    spare_film = get_json(client.post("/api/films", json={"name": "Gold 200"}))
+    assert client.delete(f"/api/cameras/{spare_cam['id']}").status_code == 200
+    assert client.delete(f"/api/films/{spare_film['id']}").status_code == 200
+    # 404s
+    assert client.delete("/api/cameras/99999").status_code == 404
+    assert client.delete("/api/lenses/99999").status_code == 404
+    assert client.delete("/api/films/99999").status_code == 404
+
+
+def test_film_note_api(client):
+    film = get_json(client.get("/api/films"))[0]
+    assert film["note"] == ""
+    r = client.put(f"/api/films/{film['id']}", json={"note": "half stop under"})
+    assert r.status_code == 200 and get_json(r)["note"] == "half stop under"
+    assert get_json(client.get("/api/films"))[0]["note"] == "half stop under"
+    assert client.put("/api/films/99999", json={"note": "x"}).status_code == 404
+    assert client.put(f"/api/films/{film['id']}", json={}).status_code == 400

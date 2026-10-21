@@ -158,6 +158,8 @@
       keep it compatible with every camera.</p>
     <div id="lens-cam-list" class="chip-row"></div>
     <div class="modal-actions">
+      <button id="lens-delete" class="btn danger">Delete</button>
+      <span class="spacer"></span>
       <button id="lens-cancel" class="btn ghost">Cancel</button>
       <button id="lens-save" class="btn primary">Save</button>
     </div>
@@ -178,8 +180,24 @@
     <label>Compatible lenses</label>
     <ul id="camera-lenses" class="sublist"></ul>
     <div class="modal-actions">
+      <button id="camera-info-delete" class="btn danger">Delete</button>
+      <span class="spacer"></span>
       <button id="camera-info-close" class="btn ghost">Close</button>
       <button id="camera-info-save" class="btn primary">Save</button>
+    </div>
+  </div>
+</section>
+
+<section id="film-modal" class="modal" hidden aria-label="Film details">
+  <div class="modal-card">
+    <h2 id="film-modal-title">Film</h2>
+    <label for="film-note">Note</label>
+    <textarea id="film-note" rows="2" placeholder="batch, expiry, exposure quirks..."></textarea>
+    <div class="modal-actions">
+      <button id="film-delete" class="btn danger">Delete</button>
+      <span class="spacer"></span>
+      <button id="film-cancel" class="btn ghost">Close</button>
+      <button id="film-save" class="btn primary">Save</button>
     </div>
   </div>
 </section>

@@ -93,6 +93,9 @@ function route() {
   document.querySelectorAll(".drawer-item").forEach((el) =>
     el.classList.toggle("active", el.dataset.page === page));
   closeDrawer();
+  // cameras/film pages do not use the edit-mode paradigm (field pages
+  // don't need it; gear edits live behind the ⓘ popovers instead)
+  $("edit-mode-btn").hidden = (page === "cameras" || page === "film");
   const view = $("view");
   if (page === "rolls") renderRolls(view);
   else if (page === "locations") renderLocations(view);
@@ -192,11 +195,10 @@ function renderCameras(view) {
     </div>` +
     (lensCount ? mruSort(state.lenses).map((l) => `
     <article class="card">
-      <button class="card-edit" data-act="edit-lens" data-id="${l.id}"
-              aria-label="Edit lens compatibility" title="Compatible cameras?">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h4L20 8l-4-4L4 16v4z"/><path d="M13.5 6.5l4 4"/></svg>
-      </button>
-      <h3>${esc(l.name)}</h3>
+      <h3>${esc(l.name)}
+        <button class="info-btn" data-act="info-lens" data-id="${l.id}"
+                aria-label="Lens details" title="Details">i</button>
+      </h3>
       <div class="meta">${l.used_count} roll${l.used_count === 1 ? "" : "s"}` +
         (l.last_used ? ` · last used ${esc(fmtDT(l.last_used))}` : "") + `</div>
       <div class="meta">${lensCompatText(l)}</div>
@@ -232,9 +234,13 @@ function renderFilm(view) {
     </div>` +
     mruSort(state.films).map((f) => `
     <article class="card">
-      <h3>${esc(f.name)}</h3>
+      <h3>${esc(f.name)}
+        <button class="info-btn" data-act="info-film" data-id="${f.id}"
+                aria-label="Film details" title="Details">i</button>
+      </h3>
       <div class="meta">${f.used_count} roll${f.used_count === 1 ? "" : "s"}` +
         (f.last_used ? ` · last used ${esc(fmtDT(f.last_used))}` : "") + `</div>
+      ${f.note ? `<p class="note">${esc(f.note)}</p>` : ""}
     </article>`).join("");
   $("add-film").addEventListener("click", async () => {
     const name = $("new-film").value.trim();
@@ -437,6 +443,51 @@ $("camera-info-save").addEventListener("click", async () => {
   } catch (e) { toast(e.message); }
 });
 
+/* Film inventory popover: note + guarded delete */
+let filmInfoTarget = null;
+
+function openFilmInfo(film) {
+  filmInfoTarget = film;
+  $("film-modal-title").textContent = film.name;
+  $("film-note").value = film.note || "";
+  openModal("film-modal");
+}
+
+$("film-cancel").addEventListener("click", () => closeModal("film-modal"));
+$("film-save").addEventListener("click", async () => {
+  if (!filmInfoTarget) return;
+  try {
+    await api(`/api/films/${filmInfoTarget.id}`, { method: "PUT", body: {
+      note: $("film-note").value.trim() } });
+    closeModal("film-modal");
+    await refreshData(); route(); toast("Film saved");
+  } catch (e) { toast(e.message); }
+});
+
+/* Guarded deletes: the server refuses (400) while rolls still reference
+   the item; the toast surfaces that message verbatim. */
+async function deleteGear(path, kind, name, closeId) {
+  if (!confirm(`Delete ${kind} "${name}"? This cannot be undone.`)) return;
+  try {
+    await api(path, { method: "DELETE" });
+    closeModal(closeId);
+    await refreshData(); route(); toast(`${kind} deleted`);
+  } catch (e) { toast(e.message); }
+}
+
+$("camera-info-delete").addEventListener("click", () => {
+  if (camInfoTarget) deleteGear(`/api/cameras/${camInfoTarget.id}`,
+    "camera", camInfoTarget.name, "camera-info-modal");
+});
+$("lens-delete").addEventListener("click", () => {
+  if (lensEditTarget) deleteGear(`/api/lenses/${lensEditTarget.id}`,
+    "lens", lensEditTarget.name, "lens-modal");
+});
+$("film-delete").addEventListener("click", () => {
+  if (filmInfoTarget) deleteGear(`/api/films/${filmInfoTarget.id}`,
+    "film", filmInfoTarget.name, "film-modal");
+});
+
 /* New Location (create or edit). openLocAdd targets the current roll
    (bottom bar) or an explicit roll ("+ location" on a roll card). */
 function resetLocModal(mode) {
@@ -512,12 +563,15 @@ $("view").addEventListener("click", (e) => {
     if (l) openLocEdit(l);
   } else if (act === "edit-entry") {
     openEntryEdit(Number(btn.dataset.roll), Number(btn.dataset.loc));
-  } else if (act === "edit-lens") {
+  } else if (act === "info-lens") {
     const l = state.lenses.find((x) => x.id === Number(btn.dataset.id));
     if (l) openLensEdit(l);
   } else if (act === "info-camera") {
     const c = state.cameras.find((x) => x.id === Number(btn.dataset.id));
     if (c) openCameraInfo(c);
+  } else if (act === "info-film") {
+    const f = state.films.find((x) => x.id === Number(btn.dataset.id));
+    if (f) openFilmInfo(f);
   } else if (act === "add-loc") {
     openLocAdd(Number(btn.dataset.id));
   } else if (act === "del-roll") {
@@ -642,7 +696,7 @@ $("edit-mode-btn").addEventListener("click", () => {
 document.addEventListener("keydown", (e) => {
   if (e.key !== "Escape") return;
   for (const id of ["entry-modal", "roll-modal", "loc-modal", "lens-modal",
-                    "camera-info-modal", "settings-modal"])
+                    "camera-info-modal", "film-modal", "settings-modal"])
     if (!$(id).hidden) { closeModal(id); return; }
   closeDrawer();
 });

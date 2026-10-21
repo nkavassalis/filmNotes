@@ -56,6 +56,7 @@ CREATE TABLE IF NOT EXISTS cameras (
 CREATE TABLE IF NOT EXISTS films (
   id         INTEGER PRIMARY KEY,
   name       TEXT NOT NULL UNIQUE,
+  note       TEXT NOT NULL DEFAULT '',
   created_at TEXT NOT NULL
 );
 CREATE TABLE IF NOT EXISTS locations (
@@ -149,6 +150,9 @@ def _migrate(conn):
             if col not in cols(table):
                 conn.execute(f"ALTER TABLE {table} ADD COLUMN {col} "
                              "TEXT NOT NULL DEFAULT ''")
+    # v0.9: note on films (no serial - a box of film doesn't have one).
+    if "note" not in cols("films"):
+        conn.execute("ALTER TABLE films ADD COLUMN note TEXT NOT NULL DEFAULT ''")
     conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_rolls_roll_no "
                  "ON rolls(roll_no)")
 
@@ -296,14 +300,71 @@ def add_lens(conn, name):
 
 def list_films(conn):
     return [dict(r) for r in conn.execute(
-        """SELECT f.id, f.name, COUNT(r.id) AS used_count,
+        """SELECT f.id, f.name, f.note, COUNT(r.id) AS used_count,
                   MAX(COALESCE(r.shot_at, r.created_at)) AS last_used
            FROM films f LEFT JOIN rolls r ON r.film_id = f.id
            GROUP BY f.id ORDER BY f.name""")]
 
 
 def get_film(conn, film_id):
-    return conn.execute("SELECT * FROM films WHERE id=?", (film_id,)).fetchone()
+    row = conn.execute("SELECT * FROM films WHERE id=?",
+                       (film_id,)).fetchone()
+    return dict(row) if row else None
+
+
+def update_film(conn, film_id, patch):
+    """patch keys: note (validated)."""
+    if conn.execute("SELECT 1 FROM films WHERE id=?",
+                    (film_id,)).fetchone() is None:
+        return None
+    return _apply_update(conn, "films", "id", film_id, patch)
+
+
+# ------------------------------------------------------- guarded deletes
+#
+# Cameras, lenses and films may only disappear when no roll references
+# them (history must stay intact); the check lives in the db layer so
+# the API can answer with a friendly 400.
+
+def _in_use(conn, col, obj_id):
+    return conn.execute(
+        f"SELECT 1 FROM rolls WHERE {col}=?", (obj_id,)).fetchone() is not None
+
+
+def delete_camera(conn, camera_id):
+    """True deleted, False in use, None unknown id."""
+    if conn.execute("SELECT 1 FROM cameras WHERE id=?",
+                    (camera_id,)).fetchone() is None:
+        return None
+    if _in_use(conn, "camera_id", camera_id):
+        return False
+    conn.execute("DELETE FROM lens_cameras WHERE camera_id=?", (camera_id,))
+    conn.execute("DELETE FROM cameras WHERE id=?", (camera_id,))
+    conn.commit()
+    return True
+
+
+def delete_lens(conn, lens_id):
+    if conn.execute("SELECT 1 FROM lenses WHERE id=?",
+                    (lens_id,)).fetchone() is None:
+        return None
+    if _in_use(conn, "lens_id", lens_id):
+        return False
+    conn.execute("DELETE FROM lens_cameras WHERE lens_id=?", (lens_id,))
+    conn.execute("DELETE FROM lenses WHERE id=?", (lens_id,))
+    conn.commit()
+    return True
+
+
+def delete_film(conn, film_id):
+    if conn.execute("SELECT 1 FROM films WHERE id=?",
+                    (film_id,)).fetchone() is None:
+        return None
+    if _in_use(conn, "film_id", film_id):
+        return False
+    conn.execute("DELETE FROM films WHERE id=?", (film_id,))
+    conn.commit()
+    return True
 
 
 def add_film(conn, name):

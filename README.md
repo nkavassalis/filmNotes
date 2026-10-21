@@ -25,10 +25,10 @@ installs to the home screen, and keeps everything on your own server.
   nothing changes. Once you start using them, the New Roll popover
   **auto-selects the most recently used lens for whichever camera you
   pick** (switching cameras re-applies that camera's latest lens).
-  In edit mode each lens card gets a pencil to choose **compatible
-  cameras** (toggle chips): the lens then only appears in the dropdown
-  for those cameras. A lens with none picked fits **every** camera —
-  assignments narrow, they never gate.
+  Tap a lens card's **ⓘ** to choose **compatible cameras** (toggle
+  chips): the lens then only appears in the dropdown for those cameras.
+  A lens with none picked fits **every** camera — assignments narrow,
+  they never gate.
 - **New Roll** (bottom bar) — compact popover: **roll number + film on
   the first row, camera + lens on the second**, then a
   Location field with a friendly name derived from the device location
@@ -43,7 +43,10 @@ installs to the home screen, and keeps everything on your own server.
   place to the same roll updates its entry instead of duplicating it.
   With no rolls yet the location is created standalone.
 - **Edit pencils** — hidden by default to keep things uncluttered. The
-  pencil button in the top bar (left of the cog) toggles edit mode; while
+  pencil button in the top bar (left of the cog) toggles edit mode on
+  the **Rolls and Locations pages** (the Cameras and Film pages hide it
+  entirely — gear is edited from the ⓘ popovers, not in the field);
+  while
   it's on, every roll card and location card shows a pencil to fix a
   mistake (roll number, camera, film, dates, notes, place name), and each
   location entry under a roll gets its own pencil for the entry **location**
@@ -67,13 +70,18 @@ installs to the home screen, and keeps everything on your own server.
   "Dates show time" toggle (Hide/Show) if you want the full timestamp.
 - **Settings** (cog, top right) — UI theme: Auto (follows the system),
   Light, or Dark. Stored server-side, so every device you use agrees.
-- **Inventory** — every camera and lens can carry a **serial #** and a
-  **note** (servicing history, quirks, light seals...). Tap the little
-  **ⓘ** on a camera card to see and edit its serial and note, plus a
-  roll-up of all lenses compatible with it (with their serials and
-  notes). Lens serials and notes are edited from the lens editor (edit
-  mode pencil). These details stay in the inventory popover — the rest
-  of the UI stays clean.
+- **Inventory** — every camera and lens carries a **serial #** and a
+  **note**; every film carries a **note** (batch, expiry, exposure
+  quirks...). Tap the little **ⓘ** on any camera, lens, or film card to
+  view and edit those details — no edit mode needed. The camera popover
+  also rolls up **all lenses compatible with it** (with their serials
+  and notes). These details stay in the popovers; the rest of the UI
+  stays clean.
+- **Delete gear** — every ⓘ popover has a red **Delete** with a confirm
+  dialog. Cameras, lenses, and films delete only while **no roll
+  references them**; otherwise you get an error ("rolls still use this
+  camera - delete those rolls first") and the item stays. Roll history
+  never loses its gear.
 - **Pages drawer** — hamburger (top left) or swipe from the left edge
   exposes Rolls / Locations / Cameras / Film (no heading, just the list).
 - **Bottom bar** — New Roll and New Location, pinned across every screen.

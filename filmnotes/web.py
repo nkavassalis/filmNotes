@@ -273,6 +273,44 @@ def create_app(db_path, conn=None):
         name = _str(data, "name", required=True)
         return jsonify(db.add_film(conn, name)), 201
 
+    @app.put("/api/films/<int:film_id>")
+    def api_edit_film(film_id):
+        data = _body()
+        patch = {}
+        if "note" in data:
+            patch["note"] = _note(data)
+        if not patch:
+            raise BadRequest("no known fields in body")
+        film = db.update_film(conn, film_id, patch)
+        if film is None:
+            return jsonify(error="film not found"), 404
+        return jsonify(film)
+
+    # ------------------------------------------- guarded gear deletes
+    # only deletable while NO roll references them (400 otherwise)
+
+    def _delete_gear(table, kind, obj_id):
+        result = {"camera": db.delete_camera, "lens": db.delete_lens,
+                  "film": db.delete_film}[kind](conn, obj_id)
+        if result is None:
+            return jsonify(error=f"{kind} not found"), 404
+        if result is False:
+            return jsonify(error=f"rolls still use this {kind} - delete "
+                                "those rolls first"), 400
+        return jsonify(deleted=True)
+
+    @app.delete("/api/cameras/<int:camera_id>")
+    def api_delete_camera(camera_id):
+        return _delete_gear("cameras", "camera", camera_id)
+
+    @app.delete("/api/lenses/<int:lens_id>")
+    def api_delete_lens(lens_id):
+        return _delete_gear("lenses", "lens", lens_id)
+
+    @app.delete("/api/films/<int:film_id>")
+    def api_delete_film(film_id):
+        return _delete_gear("films", "film", film_id)
+
     # ------------------------------------------------------------ editing
 
     @app.put("/api/rolls/<int:roll_id>")

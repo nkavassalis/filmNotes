@@ -411,3 +411,54 @@ def test_migrate_adds_inventory_cols(conn):
     for table in ("cameras", "lenses"):
         cols = {r["name"] for r in conn.execute(f"PRAGMA table_info({table})")}
         assert {"serial", "note"} <= cols
+
+
+# ------------------------------------------------------- guarded deletes
+
+def _mk_roll_with(conn, camera_id, film_id, lens_id=None):
+    loc = db.add_location(conn, "Home")
+    return db.add_roll(conn, camera_id, film_id, loc["id"], lens_id=lens_id)
+
+
+def test_delete_camera_guarded(conn):
+    cam = db.list_cameras(conn)[0]
+    film = db.list_films(conn)[0]
+    spare_cam = db.add_camera(conn, "Spare SLR")
+    _mk_roll_with(conn, cam["id"], film["id"])
+    assert db.delete_camera(conn, cam["id"]) is False       # in use
+    assert db.delete_camera(conn, spare_cam["id"]) is True  # free
+    assert db.delete_camera(conn, spare_cam["id"]) is None  # gone
+    # deleting a camera cleans its lens_cameras rows
+    lens = db.add_lens(conn, "40mm")
+    db.set_lens_cameras(conn, lens["id"], [cam["id"]])
+    assert db.delete_camera(conn, cam["id"]) is False   # still in use
+    assert db.get_lens(conn, lens["id"])["camera_ids"] == [cam["id"]]
+    spare2 = db.add_camera(conn, "Spare2")
+    db.set_lens_cameras(conn, lens["id"], [cam["id"], spare2["id"]])
+    assert db.delete_camera(conn, spare2["id"]) is True
+    assert db.get_lens(conn, lens["id"])["camera_ids"] == [cam["id"]]  # only spare2's row gone
+
+
+def test_delete_lens_and_film_guarded(conn):
+    cam = db.list_cameras(conn)[0]
+    film = db.list_films(conn)[0]
+    lens = db.add_lens(conn, "28mm")
+    _mk_roll_with(conn, cam["id"], film["id"], lens_id=lens["id"])
+    assert db.delete_lens(conn, lens["id"]) is False
+    assert db.delete_film(conn, film["id"]) is False
+    assert db.delete_lens(conn, 99999) is None
+    assert db.delete_film(conn, 99999) is None
+    spare_lens = db.add_lens(conn, "135mm")
+    spare_film = db.add_film(conn, "Ektar 100")
+    assert db.delete_lens(conn, spare_lens["id"]) is True
+    assert db.delete_film(conn, spare_film["id"]) is True
+    assert db.get_lens(conn, spare_lens["id"]) is None
+    assert db.get_film(conn, spare_film["id"]) is None
+
+
+def test_film_note_migration_and_update(conn):
+    film = db.list_films(conn)[0]
+    assert film["note"] == ""
+    db.update_film(conn, film["id"], {"note": "batch 4471"})
+    assert db.list_films(conn)[0]["note"] == "batch 4471"
+    assert db.update_film(conn, 99999, {"note": "x"}) is None

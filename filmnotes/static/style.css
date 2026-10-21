@@ -374,6 +374,8 @@ input:focus, select:focus, textarea:focus {
 .btn.ghost.icon { padding: 0 12px; display: grid; place-items: center; }
 .btn.ghost.icon svg { width: 21px; height: 21px; }
 .btn.ghost:active { color: var(--text); }
+.btn.danger { color: var(--danger); }
+.btn.danger:active { filter: brightness(0.8); }
 .modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 20px; }
 
 /* repo link at the foot of the settings popover */

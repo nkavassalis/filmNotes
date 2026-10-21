@@ -854,9 +854,8 @@ def test_lens_compatibility_filters_dropdown(browser, server):
         page.click("#add-lens")
         page.wait_for_selector(f"text={name}")
     assert "All cameras" in page.inner_text("#view")   # unassigned = fits all
-    # assign the 50mm to Leica MP only (pencil appears in edit mode)
-    page.click("#edit-mode-btn")
-    page.locator('[data-act="edit-lens"]').first.click()
+    # assign the 50mm to Leica MP only (ⓘ opens the editor, no edit mode)
+    page.locator('[data-act="info-lens"]').first.click()
     page.wait_for_selector("#lens-modal:visible")
     assert page.inner_text("#lens-modal-title") == "50mm f/1.4"
     page.locator("#lens-cam-list .chip-toggle", has_text="Leica MP").click()
@@ -900,9 +899,8 @@ def test_camera_inventory_flow(browser, server):
     page.fill("#new-lens", "55mm f/1.2")
     page.click("#add-lens")
     page.wait_for_selector("text=55mm f/1.2")
-    # lens serial + note via the lens editor
-    page.click("#edit-mode-btn")
-    page.locator('[data-act="edit-lens"]').first.click()
+    # lens serial + note via the lens editor (ⓘ, no edit mode needed)
+    page.locator('[data-act="info-lens"]').first.click()
     page.wait_for_selector("#lens-modal:visible")
     page.fill("#lens-serial", "L-55-001")
     page.fill("#lens-note", "slight haze")
@@ -910,7 +908,6 @@ def test_camera_inventory_flow(browser, server):
     page.click("#lens-save")
     page.wait_for_selector("#lens-modal", state="hidden")
     # camera serial + note via the info popover; compatible lenses listed
-    page.locator('[data-act="info-camera"]', has_text="").first  # no-op reference
     mp_card = page.locator("#view .card", has_text="Leica MP").first
     mp_card.locator('[data-act="info-camera"]').click()
     page.wait_for_selector("#camera-info-modal:visible")
@@ -928,9 +925,71 @@ def test_camera_inventory_flow(browser, server):
     lenses_txt = page.inner_text("#camera-lenses")
     assert "55mm f/1.2" in lenses_txt and "L-55-001" in lenses_txt
     assert "slight haze" in lenses_txt
-    # the info button is visible WITHOUT edit mode too
-    page.keyboard.press("Escape")
-    page.click("#edit-mode-btn")  # turn edit mode off
+    # the info button never needed edit mode — edit mode is hidden on
+    # this page entirely (asserted in test_gear_pages_info_and_guarded_delete)
     assert mp_card.locator('[data-act="info-camera"]').is_visible()
+    assert page.errors == []
+    page.context.close()
+
+
+def test_gear_pages_info_and_guarded_delete(browser, server):
+    page = open_page(browser, viewport=MOBILE)
+    # edit-mode toggle hidden on cameras/film, present on rolls
+    goto_page(page, "cameras")
+    assert page.locator("#edit-mode-btn").is_hidden()
+    goto_page(page, "film")
+    assert page.locator("#edit-mode-btn").is_hidden()
+    goto_page(page, "rolls")
+    assert page.locator("#edit-mode-btn").is_visible()
+    # a roll so Portra is in use
+    create_roll(page, "Leica MP", "Kodak Portra 400", "Pier")
+    # film note via ⓘ
+    goto_page(page, "film")
+    portra = page.locator("#view .card", has_text="Kodak Portra 400").first
+    portra.locator('[data-act="info-film"]').click()
+    page.wait_for_selector("#film-modal:visible")
+    page.fill("#film-note", "half stop under")
+    page.click("#film-save")
+    page.wait_for_selector("#film-modal", state="hidden")
+    wait_toast(page, "Film saved")
+    assert "half stop under" in page.inner_text("#view")
+    # in-use film refuses deletion (modal stays open, error toast)
+    page.on("dialog", lambda d: d.accept())
+    portra.locator('[data-act="info-film"]').click()
+    page.wait_for_selector("#film-modal:visible")
+    page.click("#film-delete")
+    wait_toast(page, "rolls still use this film")
+    assert page.is_visible("#film-modal")
+    page.click("#film-cancel")
+    page.wait_for_selector("#film-modal", state="hidden")
+    # unused film deletes fine
+    delta = page.locator("#view .card", has_text="Ilford Delta 100").first
+    delta.locator('[data-act="info-film"]').click()
+    page.wait_for_selector("#film-modal:visible")
+    page.click("#film-delete")
+    page.wait_for_selector("#film-modal", state="hidden")
+    wait_toast(page, "film deleted")
+    assert "Delta 100" not in page.inner_text("#view")
+    # unused camera deletes from its info popover
+    goto_page(page, "cameras")
+    bronica = page.locator("#view .card", has_text="Bronica SQ-A").first
+    bronica.locator('[data-act="info-camera"]').click()
+    page.wait_for_selector("#camera-info-modal:visible")
+    page.click("#camera-info-delete")
+    page.wait_for_selector("#camera-info-modal", state="hidden")
+    wait_toast(page, "camera deleted")
+    assert "Bronica" not in page.inner_text("#view")
+    # unused lens deletes from the lens editor
+    page.click("#lenses-toggle")
+    page.fill("#new-lens", "28mm f/2.8")
+    page.click("#add-lens")
+    page.wait_for_selector("text=28mm f/2.8")
+    lens_card = page.locator("#view .card", has_text="28mm f/2.8").first
+    lens_card.locator('[data-act="info-lens"]').click()
+    page.wait_for_selector("#lens-modal:visible")
+    page.click("#lens-delete")
+    page.wait_for_selector("#lens-modal", state="hidden")
+    wait_toast(page, "lens deleted")
+    assert "28mm f/2.8" not in page.inner_text("#view")
     assert page.errors == []
     page.context.close()
