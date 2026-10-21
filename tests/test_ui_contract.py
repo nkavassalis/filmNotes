@@ -56,5 +56,8 @@ def test_pwa_wiring():
 def test_bottombar_hidden_only_for_settings():
     assert "body.settings-open #bottombar" in CSS
     assert "settings-open" in SCRIPT
-    # only two rules may hide anything: the [hidden] contract and settings
-    assert CSS.count("display: none") == 2
+    # only three rules may hide anything: the [hidden] contract, the
+    # settings-open bottombar, and .add-loc (must claim no space when
+    # edit mode is off - user requirement)
+    assert CSS.count("display: none") == 3
+    assert ".add-loc" in CSS and "body.edit-mode .add-loc" in CSS

@@ -74,8 +74,11 @@ the ui tier fails with "Executable doesn't exist" and you must
 - **Edit pencils are gated behind an edit mode toggle** (topbar
   `#edit-mode-btn`, toggles `body.edit-mode`). The per-card pencils and
   red trash buttons use `visibility: hidden` by default, NOT
-  `display: none` — that keeps the "only two display:none rules" UI
-  contract intact and preserves card layout (padding-right is reserved).
+  `display: none` — that keeps the display:none UI contract tight and
+  preserves card layout (padding-right is reserved). The one exception is
+  `+ location` on roll cards (chip row, right-justified): it uses
+  `display: none` so it claims NO space outside edit mode (user
+  requirement; the contract test whitelists exactly three rules).
   Editing/deleting is rare; default view is clean.
 - **Deletes live only in edit mode and confirm first** (native
   `confirm()`; Playwright handles it via page.on("dialog")). app.js
@@ -161,10 +164,10 @@ the ui tier fails with "Executable doesn't exist" and you must
   `prefers-color-scheme`; `light`/`dark` force the attribute. Both dark
   token blocks must stay identical.
 - **Bottom bar hides ONLY for settings** (spec). Implemented via
-  `body.settings-open #bottombar`. `test_ui_contract` asserts only two
-  rules in the CSS may set `display: none` (the `[hidden]` contract and
-  this one) — if you need another overlay that hides the bar, update the
-  spec and the test together.
+  `body.settings-open #bottombar`. `test_ui_contract` asserts exactly
+  three rules in the CSS may set `display: none` (the `[hidden]`
+  contract, the settings-open bottombar, and `.add-loc`) — if you need
+  another, update the spec and the test together.
 - **MRU dropdown sorting** is done client-side (`mruSort`) from
   `used_count`/`last_used` supplied by `list_cameras`/`list_films`. Server
   returns alphabetical; UI owns ordering.

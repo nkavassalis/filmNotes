@@ -733,7 +733,15 @@ def test_add_location_to_older_roll(browser, server):
                 shot="2026-01-01 10:00")
     create_roll(page, "Leica M6", "Ilford HP5 400", "Dune",
                 count=2, shot="2026-01-02 10:00")
+    # outside edit mode the + location button is gone entirely (no gap)
+    add_btn = page.locator("#view .card").first.locator('[data-act="add-loc"]')
+    assert add_btn.is_hidden()
     page.click("#edit-mode-btn")
+    assert not add_btn.is_hidden()
+    # right-justified on the chip row: its right edge hugs the card's
+    card_box = page.locator("#view .card").first.bounding_box()
+    btn_box = add_btn.bounding_box()
+    assert card_box["x"] + card_box["width"] - (btn_box["x"] + btn_box["width"]) < 30
     # cards are newest-first; the older roll (#1) is the last card
     page.locator("#view .card").nth(1).locator('[data-act="add-loc"]').click()
     page.wait_for_selector("#loc-modal:visible")

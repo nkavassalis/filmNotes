@@ -122,6 +122,7 @@ function renderRolls(view) {
       <div class="chips">
         <span class="chip">${esc(r.camera)}</span>
         <span class="chip">${esc(r.film)}</span>
+        <button class="add-loc" data-act="add-loc" data-id="${r.id}">+ location</button>
       </div>
       ${r.note ? `<p class="note">${esc(r.note)}</p>` : ""}
       ${(r.locations || []).length ? `<ul class="sublist">` + r.locations.map((l) => `
@@ -133,7 +134,6 @@ function renderRolls(view) {
           <b><a class="loc-link" href="${mapUrl(l)}" target="_blank" rel="noopener">&#128205; ${esc(l.name)}</a></b>
           <span class="meta">${esc(fmtDT(l.visited_at))}</span>
           ${l.note ? `<span class="meta">${esc(l.note)}</span>` : ""}</li>`).join("") + `</ul>` : ""}
-      <button class="add-loc" data-act="add-loc" data-id="${r.id}">+ location</button>
     </article>`).join("");
 }
 
