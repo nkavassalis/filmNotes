@@ -57,6 +57,11 @@ README.md                  end users        AGENTS.md      agents (this file)
 python3 -m venv .venv && .venv/bin/pip install -r requirements.txt \
     && .venv/bin/pip install -r requirements-dev.txt
 .venv/bin/python run.py                 # 127.0.0.1:8961, data/filmnotes.sqlite
+# For the long-lived instance on the user's box ALWAYS launch detached:
+#   setsid nohup .venv/bin/python run.py --host 0.0.0.0 --port 8961 \
+#     > filmnotes.log 2>&1 &
+# (A plain nohup launch was observed to die between agent turns — session
+# cleanup killed the process group. setsid prevents that. RSSGATE pattern.)
 .venv/bin/python -m pytest              # hermetic tier (default; -m "not ui")
 .venv/bin/python -m pytest -m ui        # browser tier; needs port 8961 free
 ```
