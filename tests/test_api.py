@@ -477,3 +477,26 @@ def test_relink_missing_entry_404(client):
     resp = client.put(f"/api/rolls/{r['id']}/locations/{get_json(client.get('/api/rolls'))[0]['locations'][0]['id']}",
                       json={"location_id": 99999})
     assert resp.status_code == 400
+
+
+def test_add_location_to_specific_roll(client):
+    r1 = _mk_roll(client, location_name="Alpha", shot_at="2026-01-01 10:00")
+    r2 = _mk_roll(client, location_name="Beta", shot_at="2026-01-02 10:00")
+    # explicit roll_id attaches to THAT roll even though r2 is current
+    resp = client.post("/api/locations", json={"name": "Gamma",
+                                               "roll_id": r1["id"]})
+    assert resp.status_code == 201
+    out = get_json(resp)
+    assert out["attached_to_roll"] == r1["id"]
+    assert out["attached_to_roll_no"] == r1["roll_no"]
+    rolls = {r["id"]: r for r in get_json(client.get("/api/rolls"))}
+    assert {l["name"] for l in rolls[r1["id"]]["locations"]} == {"Alpha", "Gamma"}
+    assert {l["name"] for l in rolls[r2["id"]]["locations"]} == {"Beta"}
+    # default (no roll_id) still attaches to the current roll
+    resp = client.post("/api/locations", json={"name": "Delta"})
+    assert get_json(resp)["attached_to_roll"] == r2["id"]
+    # validation
+    assert client.post("/api/locations",
+                       json={"name": "X", "roll_id": 99999}).status_code == 400
+    assert client.post("/api/locations",
+                       json={"name": "X", "roll_id": "1"}).status_code == 400

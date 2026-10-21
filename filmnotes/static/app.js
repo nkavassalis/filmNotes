@@ -133,6 +133,7 @@ function renderRolls(view) {
           <b><a class="loc-link" href="${mapUrl(l)}" target="_blank" rel="noopener">&#128205; ${esc(l.name)}</a></b>
           <span class="meta">${esc(fmtDT(l.visited_at))}</span>
           ${l.note ? `<span class="meta">${esc(l.note)}</span>` : ""}</li>`).join("") + `</ul>` : ""}
+      <button class="add-loc" data-act="add-loc" data-id="${r.id}">+ location</button>
     </article>`).join("");
 }
 
@@ -321,7 +322,8 @@ $("roll-save").addEventListener("click", async () => {
   } catch (e) { toast(e.message); }
 });
 
-/* New Location (create or edit) */
+/* New Location (create or edit). openLocAdd targets the current roll
+   (bottom bar) or an explicit roll ("+ location" on a roll card). */
 function resetLocModal(mode) {
   edit = mode === "edit" ? edit : null;
   $("loc-title").textContent = mode === "edit" ? "Edit Location" : "New Location";
@@ -329,24 +331,35 @@ function resetLocModal(mode) {
   $("loc-current").hidden = mode === "edit";
 }
 
-$("new-location-btn").addEventListener("click", async () => {
+async function openLocAdd(rollId) {
   try {
     const [cur] = await Promise.all([api("/api/locations/current"), refreshData()]);
     fillDatalist();
-    $("loc-current").innerHTML = cur.current
-      ? `Current camera: <b>${esc(cur.current.camera)}</b> · Current roll: ` +
-        `<b>#${esc(cur.current.roll_no)}</b> (${esc(cur.current.film)}, ${esc(fmtDT(cur.current.shot_at))})`
+    const target = rollId != null
+      ? state.rolls.find((r) => r.id === rollId)
+      : (cur.current ? { id: cur.current.id, roll_no: cur.current.roll_no,
+                         camera: cur.current.camera, film: cur.current.film,
+                         shot_at: cur.current.shot_at } : null);
+    if (rollId != null && !target) return;
+    $("loc-current").innerHTML = target
+      ? (rollId != null
+          ? `Adding to roll: <b>#${esc(target.roll_no)}</b> ` +
+            `(${esc(target.camera)}, ${esc(target.film)})`
+          : `Current camera: <b>${esc(target.camera)}</b> · Current roll: ` +
+            `<b>#${esc(target.roll_no)}</b> (${esc(target.film)}, ${esc(fmtDT(target.shot_at))})`)
       : `No rolls yet — the current camera and roll will appear here.`;
     $("loc-name").value = "";
     $("loc-note").value = "";
-    /* attaching to the current roll? default the visit to its shot date */
-    $("loc-shot").value = cur.current
-      ? cur.current.shot_at.replace(" ", "T") : dtLocalNow();
+    /* attaching to a roll? default the visit to its shot date */
+    $("loc-shot").value = target ? target.shot_at.replace(" ", "T") : dtLocalNow();
     state.lastFix = null;
     resetLocModal("new");
+    if (rollId != null) edit = { kind: "addloc", rollId };
     openModal("loc-modal");
   } catch (e) { toast(e.message); }
-});
+}
+
+$("new-location-btn").addEventListener("click", () => openLocAdd(null));
 
 function openLocEdit(loc) {
   $("loc-name").value = loc.name;
@@ -384,6 +397,8 @@ $("view").addEventListener("click", (e) => {
     if (l) openLocEdit(l);
   } else if (act === "edit-entry") {
     openEntryEdit(Number(btn.dataset.roll), Number(btn.dataset.loc));
+  } else if (act === "add-loc") {
+    openLocAdd(Number(btn.dataset.id));
   } else if (act === "del-roll") {
     delRoll(Number(btn.dataset.id), btn.dataset.no);
   } else if (act === "del-loc") {
@@ -424,10 +439,11 @@ $("loc-save").addEventListener("click", async () => {
       return;
     }
     if (state.lastFix) { body.lat = state.lastFix.lat; body.lon = state.lastFix.lon; }
+    if (edit && edit.kind === "addloc") body.roll_id = edit.rollId;
     const saved = await api("/api/locations", { method: "POST", body });
     closeModal("loc-modal");
     await refreshData();
-    location.hash = "#/locations";
+    if (!(edit && edit.kind === "addloc")) { location.hash = "#/locations"; }
     route();
     toast(saved.attached_to_roll != null
       ? `Location added to Roll #${saved.attached_to_roll_no}` : "Location saved");

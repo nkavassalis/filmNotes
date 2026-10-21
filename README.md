@@ -43,6 +43,10 @@ installs to the home screen, and keeps everything on your own server.
   deleted any time (their places stay on the Locations page). A location
   can only be deleted once no rolls reference it — otherwise the app tells
   you so and keeps it.
+- **Add a place to any roll** — in edit mode each roll card grows a
+  **+ location** button: the New Location popover opens targeted at that
+  roll (banner says "Adding to roll: #N"), so you can backfill places on
+  older rolls, not just the newest one.
 - **Maps links** — tap a location name to open Google Maps. If the
   backend has coordinates (captured when you used the location detect
   button) it links straight to the spot; otherwise it falls back to a

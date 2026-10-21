@@ -157,9 +157,10 @@ def create_app(db_path, conn=None):
 
     @app.post("/api/locations")
     def api_new_location():
-        """Create/find a place and ATTACH it to the current roll (the one
-        the popover shows). With no rolls yet it stays standalone and the
-        note lands on the location itself.
+        """Create/find a place and ATTACH it to a roll: the explicit
+        roll_id when given ("+ location" on a roll card), otherwise the
+        current roll (the popover shows it). With no rolls at all it stays
+        standalone and the note lands on the location itself.
         """
         data = _body()
         name = _str(data, "name", required=True)
@@ -169,17 +170,23 @@ def create_app(db_path, conn=None):
         if (lat is None) != (lon is None):
             raise BadRequest("lat and lon must come together")
         loc = db.get_or_create_location(conn, name, lat, lon, visited_at)
-        cur = db.current_roll(conn)
+        if data.get("roll_id") is not None:
+            if not isinstance(data["roll_id"], int) or isinstance(data["roll_id"], bool) \
+                    or db.get_roll(conn, data["roll_id"]) is None:
+                raise BadRequest("unknown roll_id")
+            target = db.get_roll(conn, data["roll_id"])
+        else:
+            target = db.current_roll(conn)
         attached = None
-        if cur is not None:
-            db.attach_location(conn, cur["id"], loc["id"], note, visited_at)
-            attached = cur["id"]
+        if target is not None:
+            db.attach_location(conn, target["id"], loc["id"], note, visited_at)
+            attached = target["id"]
         else:
             db.set_location_note(conn, loc["id"], note)
             conn.commit()
         loc = dict(db.get_location(conn, loc["id"]))
         loc["attached_to_roll"] = attached
-        loc["attached_to_roll_no"] = cur["roll_no"] if attached else None
+        loc["attached_to_roll_no"] = target["roll_no"] if attached else None
         return jsonify(loc), 201
 
     # ------------------------------------------------------------ cameras

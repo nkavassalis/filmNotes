@@ -131,9 +131,9 @@ svg { stroke: currentColor; fill: none; stroke-width: 1.8;
 /* edit pencils (rendered dynamically; delegated via data-act).
    Hidden until the topbar pencil toggles body.edit-mode — uses
    visibility, not display, so the [hidden]-contract stays at 2 rules. */
-.card-edit, .card-del, .entry-edit { visibility: hidden; }
+.card-edit, .card-del, .entry-edit, .add-loc { visibility: hidden; }
 body.edit-mode .card-edit, body.edit-mode .card-del,
-body.edit-mode .entry-edit { visibility: visible; }
+body.edit-mode .entry-edit, body.edit-mode .add-loc { visibility: visible; }
 .card-del {
   position: absolute; top: 9px; right: 46px;
   width: 34px; height: 34px; border-radius: 9px;
@@ -170,6 +170,13 @@ body.edit-mode .entry-edit { visibility: visible; }
 .sublist li { padding: 8px 2px; border-bottom: 1px solid var(--line);
               display: flex; flex-direction: column; gap: 2px; }
 .sublist li:last-child { border-bottom: 0; }
+
+/* subtle "add another place" action at the foot of each roll card */
+.add-loc {
+  border: 0; background: none; padding: 8px 0 0; margin: 0;
+  color: var(--accent); font-size: 13px; font-weight: 600;
+}
+.add-loc:active { opacity: .55; }
 .sublist .meta { font-size: 12.5px; }
 
 /* ---- bottom bar ---- */

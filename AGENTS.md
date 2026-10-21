@@ -103,6 +103,15 @@ the ui tier fails with "Executable doesn't exist" and you must
   SCAR: roll_locations has a COMPOSITE key — updates must filter on
   roll_id AND location_id (update_roll_location does this by hand; the
   generic _apply_update helper must never be pointed at the junction).
+- **Add a place to any roll**: each roll card renders a `+ location`
+  button (`data-act="add-loc"`, hidden until edit mode like the pencils)
+  opening the New Location popover targeted at that roll — app.js
+  `openLocAdd(rollId)` sets `edit={kind:'addloc',rollId}` and the save
+  sends `roll_id`; POST /api/locations attaches to that roll (400
+  unknown roll_id) instead of the current one. The bottom-bar New
+  Location button calls `openLocAdd(null)` = current-roll behavior,
+  unchanged (banner "Current camera...", redirect to #/locations after
+  save; addloc stays on the rolls page).
 - **Maps links** (app.js `mapUrl`): coordinates when the location has
   them (captured client-side by the detect button at creation), else a
   name query. Coordinates stay hidden in the UI; target=_blank so iOS

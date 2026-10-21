@@ -244,7 +244,7 @@ def create_roll(page, camera, film, location, note="", shot=None, count=1,
     page.select_option("#roll-film", label=film)
     page.fill("#roll-location", location)
     if shot:
-        page.fill("#roll-shot", shot)
+        page.fill("#roll-shot", shot.replace(" ", "T"))
     if note:
         page.fill("#roll-note", note)
     page.click("#roll-save")
@@ -723,5 +723,31 @@ def test_change_roll_location_via_entry(browser, server):
     goto_page(page, "locations")
     txt = page.inner_text("#view")
     assert "Cedar Sink" in txt and "Cedar Bridges" in txt
+    assert page.errors == []
+    page.context.close()
+
+
+def test_add_location_to_older_roll(browser, server):
+    page = open_page(browser, viewport=MOBILE)
+    create_roll(page, "Leica MP", "Kodak Portra 400", "Pier",
+                shot="2026-01-01 10:00")
+    create_roll(page, "Leica M6", "Ilford HP5 400", "Dune",
+                count=2, shot="2026-01-02 10:00")
+    page.click("#edit-mode-btn")
+    # cards are newest-first; the older roll (#1) is the last card
+    page.locator("#view .card").nth(1).locator('[data-act="add-loc"]').click()
+    page.wait_for_selector("#loc-modal:visible")
+    banner = page.inner_text("#loc-current")
+    assert "Adding to roll" in banner and "#1" in banner and "Leica MP" in banner
+    page.fill("#loc-name", "Waterfront")
+    page.click("#loc-save")
+    page.wait_for_selector("#loc-modal", state="hidden")
+    page.wait_for_selector("text=Waterfront")
+    txts = [page.locator("#view .card").nth(i).inner_text() for i in range(2)]
+    older = next(t for t in txts if "Roll #1 " in t)
+    newer = next(t for t in txts if "Roll #2" in t)
+    assert "Waterfront" in older            # landed on the targeted roll
+    assert "Waterfront" not in newer        # not the current roll
+    assert page.evaluate("location.hash") == "#/rolls"   # stayed on the page
     assert page.errors == []
     page.context.close()
