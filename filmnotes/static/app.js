@@ -844,15 +844,28 @@ function showDbg() {
   function paint() {
     const sb = getComputedStyle(probe).paddingBottom;
     const r = bar ? bar.getBoundingClientRect() : { bottom: -1 };
+    const m = {
+      screen: [screen.width, screen.height], dpr: devicePixelRatio,
+      inner: [innerWidth, innerHeight], vv: Math.round(visualViewport.height),
+      barBottom: Math.round(r.bottom), safeB: sb,
+      tc: document.querySelector("meta[name=theme-color]")?.content,
+      standalone: matchMedia("(display-mode: standalone)").matches ||
+                  !!navigator.standalone,
+    };
     box.textContent = [
-      `screen ${screen.width}x${screen.height} dpr ${devicePixelRatio}`,
-      `inner ${innerWidth}x${innerHeight}`,
-      `vv ${Math.round(visualViewport.height)}`,
-      `bar.bottom ${Math.round(r.bottom)}`,
-      `safe-b ${sb}`,
-      `tc ${document.querySelector('meta[name=theme-color]')?.content}`,
-      `standalone ${matchMedia("(display-mode: standalone)").matches || navigator.standalone}`,
+      `screen ${m.screen[0]}x${m.screen[1]} dpr ${m.dpr}`,
+      `inner ${m.inner[0]}x${m.inner[1]}`,
+      `vv ${m.vv}`,
+      `bar.bottom ${m.barBottom}`,
+      `safe-b ${m.safeB}`,
+      `tc ${m.tc}`,
+      `standalone ${m.standalone}`,
     ].join(" | ");
+    box.style.cssText = "position:fixed;top:4px;left:4px;z-index:9999;" +
+      "font:bold 13px/1.5 monospace;color:#fff;background:#a00000;" +
+      "padding:6px 8px;border-radius:6px;pointer-events:none";
+    fetch("/api/dbg", { method: "POST", headers: { "Content-Type":
+      "application/json" }, body: JSON.stringify(m) }).catch(() => {});
   }
   document.body.appendChild(box);
   paint();

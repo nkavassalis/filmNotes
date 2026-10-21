@@ -136,6 +136,14 @@ def create_app(db_path, conn=None):
 
     # ------------------------------------------------------------ pages
 
+    @app.post("/api/dbg")
+    def api_dbg():
+        """TEMP 2026-10-21: geometry telemetry from the iOS standalone app
+        for the dead-strip hunt. Logs the payload; remove with the overlay
+        in app.js showDbg()."""
+        app.logger.warning("DBG %s", request.get_json(silent=True))
+        return jsonify(ok=True)
+
     @app.route("/")
     def index():
         return render_template("index.html",
