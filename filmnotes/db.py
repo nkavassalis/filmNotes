@@ -437,8 +437,69 @@ def update_roll_location(conn, roll_id, location_id, patch):
     if "visited_at" in patch:
         touch_location_visit(conn, location_id, patch["visited_at"])
         conn.commit()
+    return _entry_row(conn, roll_id, location_id)
+
+
+def _entry_row(conn, roll_id, location_id):
     return dict(conn.execute(
         "SELECT rl.note, rl.visited_at, l.id, l.name, l.lat, l.lon "
         "FROM roll_locations rl JOIN locations l ON l.id = rl.location_id "
         "WHERE rl.roll_id=? AND rl.location_id=?",
         (roll_id, location_id)).fetchone())
+
+
+def relink_roll_location(conn, roll_id, from_location_id, to_location_id):
+    """Move a roll-at-place entry to another location (change the place a
+    roll was shot at). If the roll already lists the target, the edited
+    entry merges into it (its note fills a blank target note).
+    """
+    src = conn.execute(
+        "SELECT note, visited_at FROM roll_locations "
+        "WHERE roll_id=? AND location_id=?",
+        (roll_id, from_location_id)).fetchone()
+    if src is None:
+        return None
+    if from_location_id == to_location_id:
+        return _entry_row(conn, roll_id, to_location_id)
+    tgt = conn.execute(
+        "SELECT note FROM roll_locations "
+        "WHERE roll_id=? AND location_id=?",
+        (roll_id, to_location_id)).fetchone()
+    if tgt is None:
+        conn.execute(
+            "UPDATE roll_locations SET location_id=? "
+            "WHERE roll_id=? AND location_id=?",
+            (to_location_id, roll_id, from_location_id))
+    else:
+        conn.execute(
+            "UPDATE roll_locations SET note=CASE WHEN note='' THEN ? ELSE note END "
+            "WHERE roll_id=? AND location_id=?",
+            (src["note"], roll_id, to_location_id))
+        conn.execute(
+            "DELETE FROM roll_locations WHERE roll_id=? AND location_id=?",
+            (roll_id, from_location_id))
+    conn.commit()
+    return _entry_row(conn, roll_id, to_location_id)
+
+
+def delete_roll(conn, roll_id):
+    """Delete a roll and its location entries. Rolls go whenever."""
+    if conn.execute("SELECT 1 FROM rolls WHERE id=?", (roll_id,)).fetchone() is None:
+        return False
+    conn.execute("DELETE FROM roll_locations WHERE roll_id=?", (roll_id,))
+    conn.execute("DELETE FROM rolls WHERE id=?", (roll_id,))
+    conn.commit()
+    return True
+
+
+def delete_location(conn, location_id):
+    """Delete a location only when no rolls reference it; else False."""
+    if conn.execute("SELECT 1 FROM locations WHERE id=?",
+                    (location_id,)).fetchone() is None:
+        return False
+    if conn.execute("SELECT 1 FROM roll_locations WHERE location_id=?",
+                    (location_id,)).fetchone() is not None:
+        return False
+    conn.execute("DELETE FROM locations WHERE id=?", (location_id,))
+    conn.commit()
+    return True

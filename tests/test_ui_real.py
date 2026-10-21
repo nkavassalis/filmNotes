@@ -658,3 +658,70 @@ def test_add_camera_and_film_pages(browser, server):
     page.wait_for_selector("text=Cinestill 800T")
     assert page.errors == []
     page.context.close()
+
+
+def test_delete_roll_with_confirm(browser, server):
+    page = open_page(browser, viewport=MOBILE)
+    create_roll(page, "Leica MP", "Kodak Portra 400", "Pier")
+    create_roll(page, "Leica M6", "Ilford HP5 400", "Dune", count=2)
+    page.click("#edit-mode-btn")
+    # dismissing the confirm deletes nothing
+    page.once("dialog", lambda d: d.dismiss())
+    page.locator('[data-act="del-roll"]').first.click()
+    page.wait_for_timeout(400)
+    assert page.locator("#view .card").count() == 2
+    # accepting deletes the roll (and the confirm names the roll number)
+    seen = {}
+    def accept(d):
+        seen["msg"] = d.message
+        d.accept()
+    page.on("dialog", accept)
+    page.locator('[data-act="del-roll"]').first.click()
+    page.wait_for_function("document.querySelectorAll('#view .card').length === 1")
+    assert "Roll #" in seen["msg"] and "cannot be undone" in seen["msg"]
+    assert "deleted" in page.inner_text("#toast")
+    assert page.errors == []
+    page.context.close()
+
+
+def test_delete_locations_guarded_then_free(browser, server):
+    page = open_page(browser, viewport=MOBILE)
+    create_roll(page, "Bronica SQ-A", "Fujifilm Provia 100", "Cedar Sink")
+    goto_page(page, "locations")
+    page.click("#edit-mode-btn")
+    page.on("dialog", lambda d: d.accept())
+    # in-use locations refuse deletion even after confirming
+    page.locator('[data-act="del-loc"]').first.click()
+    page.wait_for_selector("#toast:visible")
+    assert "rolls still use" in page.inner_text("#toast")
+    assert page.locator("#view .card").count() == 1
+    # once no roll references it, the same delete succeeds
+    goto_page(page, "rolls")
+    page.locator('[data-act="del-roll"]').first.click()
+    page.wait_for_selector("#view .empty")
+    goto_page(page, "locations")
+    page.locator('[data-act="del-loc"]').first.click()
+    page.wait_for_selector("#view .empty")
+    assert page.errors == []
+    page.context.close()
+
+
+def test_change_roll_location_via_entry(browser, server):
+    page = open_page(browser, viewport=MOBILE)
+    create_roll(page, "Pentax 67", "Ilford HP5 400", "Cedar Sink")
+    page.click("#edit-mode-btn")
+    page.locator('[data-act="edit-entry"]').first.click()
+    page.wait_for_selector("#entry-modal:visible")
+    assert page.input_value("#entry-location") == "Cedar Sink"
+    page.fill("#entry-location", "Cedar Bridges")
+    page.click("#entry-save")
+    page.wait_for_selector("#entry-modal", state="hidden")
+    page.wait_for_selector("text=Cedar Bridges")
+    view = page.inner_text("#view")
+    assert "Cedar Sink" not in view          # the roll moved, not copied
+    # the old place still exists globally on the Locations page
+    goto_page(page, "locations")
+    txt = page.inner_text("#view")
+    assert "Cedar Sink" in txt and "Cedar Bridges" in txt
+    assert page.errors == []
+    page.context.close()

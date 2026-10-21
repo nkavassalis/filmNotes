@@ -34,9 +34,15 @@ installs to the home screen, and keeps everything on your own server.
 - **Edit pencils** — hidden by default to keep things uncluttered. The
   pencil button in the top bar (left of the cog) toggles edit mode; while
   it's on, every roll card and location card shows a pencil to fix a
-  mistake (camera, film, dates, notes, place name), and each location
-  entry under a roll gets its own pencil for the entry note and visit
-  date.
+  mistake (roll number, camera, film, dates, notes, place name), and each
+  location entry under a roll gets its own pencil for the entry **location**
+  (change where the roll was shot — pick an existing place or type a new
+  one), note and visit date.
+- **Delete** — also behind the edit-mode toggle: a red trash button on
+  every roll and location card, each with a confirm dialog. Rolls can be
+  deleted any time (their places stay on the Locations page). A location
+  can only be deleted once no rolls reference it — otherwise the app tells
+  you so and keeps it.
 - **Maps links** — tap a location name to open Google Maps. If the
   backend has coordinates (captured when you used the location detect
   button) it links straight to the spot; otherwise it falls back to a

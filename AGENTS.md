@@ -72,21 +72,34 @@ the ui tier fails with "Executable doesn't exist" and you must
   which the user runs on their tailnet. One process, one file of JS, one
   stylesheet.
 - **Edit pencils are gated behind an edit mode toggle** (topbar
-  `#edit-mode-btn`, toggles `body.edit-mode`). The per-card pencils use
-  `visibility: hidden` by default, NOT `display: none` — that keeps the
-  "only two display:none rules" UI contract intact and preserves card
-  layout (padding-right is reserved). Editing is rare; default view is
-  clean.
+  `#edit-mode-btn`, toggles `body.edit-mode`). The per-card pencils and
+  red trash buttons use `visibility: hidden` by default, NOT
+  `display: none` — that keeps the "only two display:none rules" UI
+  contract intact and preserves card layout (padding-right is reserved).
+  Editing/deleting is rare; default view is clean.
+- **Deletes live only in edit mode and confirm first** (native
+  `confirm()`; Playwright handles it via page.on("dialog")). app.js
+  `delRoll`/`delLoc` behind `data-act="del-roll"/"del-loc"`.
+  DELETE /api/rolls/<id> removes the roll plus its roll_locations entries
+  (places themselves survive on the Locations page). DELETE
+  /api/locations/<id> is REFUSED (400 "rolls still use this location")
+  while any roll references it — db.delete_location checks the junction.
 - **Edit pencils reuse the create modals** (app.js `edit` context var:
   {kind:'roll'|'loc'|'entry'}): roll edit hides the location group, loc
   edit hides the current-roll banner, and a third small modal
-  (`entry-modal`) edits one roll-at-place entry (note + visited date).
+  (`entry-modal`) edits one roll-at-place entry (location + note + visited
+  date). Changing `#entry-location` sends `location_name`; the server
+  get_or_creates the place and db.relink_roll_location MOVES the junction
+  row (if the roll already has that place the entries merge — the moved
+  entry's note fills a blank target note — and the stale row is deleted).
+  The old location row is left intact globally.
   Pencil buttons are rendered inside cards, so they are wired by event
   delegation on #view via `data-act` (never ids — the id contract only
   covers static template ids). Server side: PUT /api/rolls/<id>,
-  PUT /api/locations/<id>, PUT /api/rolls/<id>/locations/<lid>, each a
-  strict field whitelist (web.py), 404 JSON for unknown ids, 400 for
-  empty/invalid patches.
+  PUT /api/locations/<id>, PUT /api/rolls/<id>/locations/<lid> (whitelists
+  note, visited_at, location_name|location_id), DELETE on rolls and
+  locations; each a strict field whitelist (web.py), 404 JSON for unknown
+  ids, 400 for empty/invalid patches.
   SCAR: roll_locations has a COMPOSITE key — updates must filter on
   roll_id AND location_id (update_roll_location does this by hand; the
   generic _apply_update helper must never be pointed at the junction).

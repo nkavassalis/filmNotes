@@ -237,21 +237,43 @@ def create_app(db_path, conn=None):
             raise BadRequest("no known fields in body")
         return jsonify(db.update_roll(conn, roll_id, patch))
 
+    @app.delete("/api/rolls/<int:roll_id>")
+    def api_delete_roll(roll_id):
+        if not db.delete_roll(conn, roll_id):
+            return jsonify(error="roll not found"), 404
+        return jsonify(deleted=True)
+
     @app.put("/api/rolls/<int:roll_id>/locations/<int:location_id>")
     def api_edit_roll_location(roll_id, location_id):
         if db.get_roll(conn, roll_id) is None:
             return jsonify(error="roll not found"), 404
         data = _body()
+        entry = None
         patch = {}
         if "note" in data:
             patch["note"] = _note(data)
         if "visited_at" in data:
             patch["visited_at"] = _datetime(data, "visited_at")
-        if not patch:
-            raise BadRequest("no known fields in body")
-        entry = db.update_roll_location(conn, roll_id, location_id, patch)
+        if patch:
+            entry = db.update_roll_location(conn, roll_id, location_id, patch)
+            if entry is None:
+                return jsonify(error="that roll has no entry for that location"), 404
+        # change WHERE this roll entry was shot (relink to another place)
+        target = None
+        if "location_name" in data:
+            name = _str(data, "location_name", required=True, max_len=120)
+            target = db.get_or_create_location(conn, name)["id"]
+        elif "location_id" in data:
+            if not isinstance(data["location_id"], int) or isinstance(data["location_id"], bool) \
+                    or db.get_location(conn, data["location_id"]) is None:
+                raise BadRequest("unknown location_id")
+            target = data["location_id"]
+        if target is not None:
+            entry = db.relink_roll_location(conn, roll_id, location_id, target)
+            if entry is None:
+                return jsonify(error="that roll has no entry for that location"), 404
         if entry is None:
-            return jsonify(error="that roll has no entry for that location"), 404
+            raise BadRequest("no known fields in body")
         return jsonify(entry)
 
     @app.put("/api/locations/<int:location_id>")
@@ -269,6 +291,15 @@ def create_app(db_path, conn=None):
         if not patch:
             raise BadRequest("no known fields in body")
         return jsonify(db.update_location(conn, location_id, patch))
+
+    @app.delete("/api/locations/<int:location_id>")
+    def api_delete_location(location_id):
+        if db.get_location(conn, location_id) is None:
+            return jsonify(error="location not found"), 404
+        if not db.delete_location(conn, location_id):
+            return jsonify(error="rolls still use this location - delete "
+                                "those entries first"), 400
+        return jsonify(deleted=True)
 
     # ------------------------------------------------------------ settings
 

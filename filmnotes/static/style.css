@@ -124,15 +124,23 @@ svg { stroke: currentColor; fill: none; stroke-width: 1.8;
   margin-bottom: 10px;
   position: relative;
 }
-.card h3 { margin: 0 0 2px; font-size: 16px; padding-right: 34px; }
+.card h3 { margin: 0 0 2px; font-size: 16px; padding-right: 68px; }
 .card .meta { color: var(--muted); font-size: 13px; }
 .card .note { margin: 8px 0 0; font-size: 14px; white-space: pre-wrap; }
 
 /* edit pencils (rendered dynamically; delegated via data-act).
    Hidden until the topbar pencil toggles body.edit-mode — uses
    visibility, not display, so the [hidden]-contract stays at 2 rules. */
-.card-edit, .entry-edit { visibility: hidden; }
-body.edit-mode .card-edit, body.edit-mode .entry-edit { visibility: visible; }
+.card-edit, .card-del, .entry-edit { visibility: hidden; }
+body.edit-mode .card-edit, body.edit-mode .card-del,
+body.edit-mode .entry-edit { visibility: visible; }
+.card-del {
+  position: absolute; top: 9px; right: 46px;
+  width: 34px; height: 34px; border-radius: 9px;
+  display: grid; place-items: center; color: #e5484d;
+}
+.card-del:active { background: var(--surface2); }
+.card-del svg { width: 17px; height: 17px; }
 .card-edit {
   position: absolute; top: 9px; right: 8px;
   width: 34px; height: 34px; border-radius: 9px;

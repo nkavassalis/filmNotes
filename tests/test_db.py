@@ -300,3 +300,34 @@ def test_migrate_backfills_dates_on_old_schema(conn):
     assert r["shot_at"] == roll["created_at"][:16].replace("T", " ")
     assert db.list_locations(conn)[0]["visited_at"] == \
         loc["created_at"][:16].replace("T", " ")
+
+
+def test_delete_roll_and_location_rules(conn):
+    cam = db.list_cameras(conn)[0]["id"]
+    film = db.list_films(conn)[0]["id"]
+    loc = db.add_location(conn, "Creek")
+    roll = db.add_roll(conn, cam, film, loc["id"])
+    assert db.delete_location(conn, loc["id"]) is False   # still in use
+    assert db.delete_roll(conn, roll["id"]) is True
+    assert db.delete_roll(conn, roll["id"]) is False      # already gone
+    assert db.list_rolls(conn) == []
+    assert db.delete_location(conn, loc["id"]) is True    # now free
+    assert db.delete_location(conn, loc["id"]) is False   # already gone
+    assert db.list_locations(conn) == []
+
+
+def test_relink_merges_duplicate_entries(conn):
+    cam = db.list_cameras(conn)[0]["id"]
+    film = db.list_films(conn)[0]["id"]
+    a = db.add_location(conn, "Alpha")
+    b = db.add_location(conn, "Beta")
+    roll = db.add_roll(conn, cam, film, a["id"])
+    db.attach_location(conn, roll["id"], b["id"], "beta note")
+    # moving Alpha-entry onto Beta merges: one entry, blank note filled
+    entry = db.relink_roll_location(conn, roll["id"], a["id"], b["id"])
+    assert entry["name"] == "Beta"
+    r = db.list_rolls(conn)[0]
+    assert [l["name"] for l in r["locations"]] == ["Beta"]
+    assert r["locations"][0]["note"] == "beta note"
+    # relinking a non-existent entry returns None
+    assert db.relink_roll_location(conn, roll["id"], a["id"], b["id"]) is None

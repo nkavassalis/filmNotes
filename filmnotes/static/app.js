@@ -110,6 +110,10 @@ function renderRolls(view) {
   }
   view.innerHTML = `<h1 class="page-title">Rolls</h1>` + state.rolls.map((r) => `
     <article class="card">
+      <button class="card-del" data-act="del-roll" data-id="${r.id}"
+              data-no="${esc(r.roll_no)}" aria-label="Delete roll" title="Delete roll">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 7h12l-1 13H7L6 7z"/><path d="M9 7V4h6v3"/><path d="M10 11v5M14 11v5"/></svg>
+      </button>
       <button class="card-edit" data-act="edit-roll" data-id="${r.id}"
               aria-label="Edit roll" title="Edit roll">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h4L20 8l-4-4L4 16v4z"/><path d="M13.5 6.5l4 4"/></svg>
@@ -140,6 +144,10 @@ function renderLocations(view) {
   }
   view.innerHTML = `<h1 class="page-title">Locations</h1>` + state.locations.map((l) => `
     <article class="card">
+      <button class="card-del" data-act="del-loc" data-id="${l.id}"
+              data-name="${esc(l.name)}" aria-label="Delete location" title="Delete location">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 7h12l-1 13H7L6 7z"/><path d="M9 7V4h6v3"/><path d="M10 11v5M14 11v5"/></svg>
+      </button>
       <button class="card-edit" data-act="edit-loc" data-id="${l.id}"
               aria-label="Edit location" title="Edit location">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h4L20 8l-4-4L4 16v4z"/><path d="M13.5 6.5l4 4"/></svg>
@@ -349,19 +357,21 @@ function openLocEdit(loc) {
   openModal("loc-modal");
 }
 
-/* Edit one roll-at-place entry (note + visit date) */
+/* Edit one roll-at-place entry (place + note + visit date) */
 function openEntryEdit(rollId, locId) {
   const roll = state.rolls.find((r) => r.id === rollId);
   const entry = roll && (roll.locations || []).find((l) => l.id === locId);
   if (!entry) return;
   $("entry-place").innerHTML = `Roll #${esc(roll.roll_no)} · <b>${esc(entry.name)}</b>`;
+  fillDatalist();
+  $("entry-location").value = entry.name;
   $("entry-shot").value = (entry.visited_at || roll.shot_at || "").replace(" ", "T");
   $("entry-note").value = entry.note || "";
-  edit = { kind: "entry", rollId, locId };
+  edit = { kind: "entry", rollId, locId, name: entry.name };
   openModal("entry-modal");
 }
 
-/* pencil buttons (rendered dynamically) */
+/* pencil + trash buttons (rendered dynamically; delegated via data-act) */
 $("view").addEventListener("click", (e) => {
   const btn = e.target.closest("[data-act]");
   if (!btn) return;
@@ -374,8 +384,29 @@ $("view").addEventListener("click", (e) => {
     if (l) openLocEdit(l);
   } else if (act === "edit-entry") {
     openEntryEdit(Number(btn.dataset.roll), Number(btn.dataset.loc));
+  } else if (act === "del-roll") {
+    delRoll(Number(btn.dataset.id), btn.dataset.no);
+  } else if (act === "del-loc") {
+    delLoc(Number(btn.dataset.id), btn.dataset.name);
   }
 });
+
+/* Deletes live behind the global edit-mode toggle and confirm first. */
+async function delRoll(id, no) {
+  if (!confirm(`Delete Roll #${no}? This cannot be undone.`)) return;
+  try {
+    await api(`/api/rolls/${id}`, { method: "DELETE" });
+    await refreshData(); route(); toast(`Roll #${no} deleted`);
+  } catch (e) { toast(e.message); }
+}
+
+async function delLoc(id, name) {
+  if (!confirm(`Delete location "${name}"? This cannot be undone.`)) return;
+  try {
+    await api(`/api/locations/${id}`, { method: "DELETE" });
+    await refreshData(); route(); toast("Location deleted");
+  } catch (e) { toast(e.message); }
+}
 
 $("loc-cancel").addEventListener("click", () => closeModal("loc-modal"));
 $("loc-save").addEventListener("click", async () => {
@@ -406,11 +437,16 @@ $("loc-save").addEventListener("click", async () => {
 $("entry-cancel").addEventListener("click", () => closeModal("entry-modal"));
 $("entry-save").addEventListener("click", async () => {
   if (!edit || edit.kind !== "entry") return;
+  const body = {
+    note: $("entry-note").value.trim(),
+    visited_at: $("entry-shot").value,
+  };
+  const place = $("entry-location").value.trim();
+  if (!place) { toast("Location is required"); return; }
+  if (place !== edit.name) body.location_name = place;
   try {
     await api(`/api/rolls/${edit.rollId}/locations/${edit.locId}`,
-      { method: "PUT", body: {
-          note: $("entry-note").value.trim(),
-          visited_at: $("entry-shot").value } });
+      { method: "PUT", body });
     closeModal("entry-modal");
     await refreshData(); route(); toast("Entry updated");
   } catch (e) { toast(e.message); }

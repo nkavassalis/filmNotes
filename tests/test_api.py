@@ -411,3 +411,69 @@ def test_location_attach_toast_uses_roll_no(client):
     loc = get_json(r)
     assert loc["attached_to_roll"] is not None
     assert loc["attached_to_roll_no"] == "55"
+
+
+# ------------------------------------------------------------- deletion
+
+def test_delete_roll_removes_entries_keeps_locations(client):
+    r = _mk_roll(client, location_name="Alpha")
+    client.post("/api/locations", json={"name": "Beta"})
+    roll = get_json(client.get("/api/rolls"))[0]
+    assert len(roll["locations"]) == 2
+    resp = client.delete(f"/api/rolls/{r['id']}")
+    assert resp.status_code == 200 and get_json(resp)["deleted"] is True
+    assert get_json(client.get("/api/rolls")) == []
+    names = {l["name"] for l in get_json(client.get("/api/locations"))}
+    assert names == {"Alpha", "Beta"}          # places outlive the roll
+    assert client.delete(f"/api/rolls/{r['id']}").status_code == 404
+
+
+def test_delete_location_only_when_unused(client):
+    r = _mk_roll(client, location_name="Alpha")
+    alpha = [l for l in get_json(client.get("/api/locations"))
+             if l["name"] == "Alpha"][0]
+    resp = client.delete(f"/api/locations/{alpha['id']}")
+    assert resp.status_code == 400
+    assert "rolls still use" in get_json(resp)["error"]
+    client.delete(f"/api/rolls/{r['id']}")     # detach first...
+    assert client.delete(f"/api/locations/{alpha['id']}").status_code == 200
+    assert client.delete(f"/api/locations/{alpha['id']}").status_code == 404
+
+
+def test_relink_roll_location_entry(client):
+    r = _mk_roll(client, location_name="Alpha")
+    entry = get_json(client.get("/api/rolls"))[0]["locations"][0]
+    # move the entry to a brand-new place (created on the fly)
+    resp = client.put(f"/api/rolls/{r['id']}/locations/{entry['id']}",
+                      json={"location_name": "Beta Ridge", "note": "moved"})
+    assert resp.status_code == 200
+    assert get_json(resp)["name"] == "Beta Ridge"
+    roll = get_json(client.get("/api/rolls"))[0]
+    assert [l["name"] for l in roll["locations"]] == ["Beta Ridge"]
+    assert roll["locations"][0]["note"] == "moved"
+    # Alpha still exists as a global place, just unused
+    assert any(l["name"] == "Alpha" for l in get_json(client.get("/api/locations")))
+    # attaching another place then merging it into the existing one
+    client.post("/api/locations", json={"name": "Beta Ridge"})  # same name -> same row
+    client.post("/api/locations", json={"name": "Gamma"})
+    roll = get_json(client.get("/api/rolls"))[0]
+    assert sorted(l["name"] for l in roll["locations"]) == ["Beta Ridge", "Gamma"]
+    gamma = [l for l in roll["locations"] if l["name"] == "Gamma"][0]
+    resp = client.put(f"/api/rolls/{r['id']}/locations/{gamma['id']}",
+                      json={"location_name": "Beta Ridge"})
+    assert resp.status_code == 200
+    roll = get_json(client.get("/api/rolls"))[0]
+    assert [l["name"] for l in roll["locations"]] == ["Beta Ridge"]  # merged
+
+
+def test_relink_missing_entry_404(client):
+    r = _mk_roll(client)
+    resp = client.put(f"/api/rolls/{r['id']}/locations/9999",
+                      json={"location_name": "Nowhere"})
+    assert resp.status_code == 404
+    resp = client.put(f"/api/rolls/{r['id']}/locations/9999",
+                      json={"location_id": 1})
+    assert resp.status_code == 404
+    resp = client.put(f"/api/rolls/{r['id']}/locations/{get_json(client.get('/api/rolls'))[0]['locations'][0]['id']}",
+                      json={"location_id": 99999})
+    assert resp.status_code == 400
