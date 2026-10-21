@@ -207,6 +207,19 @@ the ui tier fails with "Executable doesn't exist" and you must
   compatibility editor is a modal (#lens-modal) with aria-pressed
   .chip-toggle buttons, opened by the edit-mode pencil (data-act=
   "edit-lens").
+- **Inventory fields** (v0.8): `serial` + `note` (TEXT NOT NULL DEFAULT
+  '') on cameras AND lenses (migration ALTERs both). PUT
+  /api/cameras/<id> {serial?, note?}; PUT /api/lenses/<id> accepts
+  serial/note/camera_ids in any combination (400 if none). list_cameras
+  and list_lenses return them (explicit column lists — remember to add
+  new columns there!). UI: inline ⓘ button (.info-btn, data-act=
+  "info-camera", ALWAYS visible — info is not an edit) opens
+  #camera-info-modal: editable serial/note + read-only compatible-lens
+  roll-up (lensCompatible filter, shows lens serial + note). Lens
+  serial/note live in the existing lens editor modal. Roll modal uses
+  .field-grid (2 cols: roll-no+film, camera+lens); fields bottom-align
+  via flex justify-content:flex-end because labels can wrap ("blank =
+  auto") and inputs must line up per row.
 - **MRU dropdown sorting** is done client-side (`mruSort`) from
   `used_count`/`last_used` supplied by `list_cameras`/`list_films`. Server
   returns alphabetical; UI owns ordering.

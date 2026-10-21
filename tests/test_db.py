@@ -387,3 +387,27 @@ def test_lens_compatibility(conn):
     with pytest.raises(ValueError):
         db.set_lens_cameras(conn, lens["id"], [99999])
     assert db.set_lens_cameras(conn, 99999, []) is None
+
+
+def test_inventory_fields_cameras_lenses(conn):
+    cam = db.list_cameras(conn)[0]
+    assert cam["serial"] == "" and cam["note"] == ""
+    out = db.update_camera(conn, cam["id"], {"serial": "12345", "note": "reclad"})
+    assert out["serial"] == "12345" and out["note"] == "reclad"
+    assert db.update_camera(conn, 99999, {"serial": "x"}) is None
+    lens = db.add_lens(conn, "50mm")
+    out = db.update_lens(conn, lens["id"], {"serial": "L1", "note": "haze"})
+    assert out["serial"] == "L1" and out["note"] == "haze"
+    assert db.update_lens(conn, 99999, {"serial": "x"}) is None
+
+
+def test_migrate_adds_inventory_cols(conn):
+    for table in ("cameras", "lenses"):
+        cols = {r["name"] for r in conn.execute(
+            f"PRAGMA table_info({table})")}
+        for col in ("serial", "note"):
+            conn.execute(f"ALTER TABLE {table} DROP COLUMN {col}")
+    db.init_db(conn)
+    for table in ("cameras", "lenses"):
+        cols = {r["name"] for r in conn.execute(f"PRAGMA table_info({table})")}
+        assert {"serial", "note"} <= cols

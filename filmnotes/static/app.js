@@ -174,7 +174,10 @@ function renderCameras(view) {
     </div>` +
     mruSort(state.cameras).map((c) => `
     <article class="card">
-      <h3>${esc(c.name)}</h3>
+      <h3>${esc(c.name)}
+        <button class="info-btn" data-act="info-camera" data-id="${c.id}"
+                aria-label="Camera details" title="Details">i</button>
+      </h3>
       <div class="meta">${c.used_count} roll${c.used_count === 1 ? "" : "s"}` +
         (c.last_used ? ` · last used ${esc(fmtDT(c.last_used))}` : "") + `</div>
     </article>`).join("") + `
@@ -371,6 +374,8 @@ let lensEditTarget = null;
 function openLensEdit(lens) {
   lensEditTarget = lens;
   $("lens-modal-title").textContent = lens.name;
+  $("lens-serial").value = lens.serial || "";
+  $("lens-note").value = lens.note || "";
   $("lens-cam-list").innerHTML = mruSort(state.cameras).map((c) =>
     `<button class="chip-toggle" data-cam="${c.id}" ` +
     `aria-pressed="${(lens.camera_ids || []).includes(c.id)}">${esc(c.name)}</button>`
@@ -393,9 +398,42 @@ $("lens-save").addEventListener("click", async () => {
     .map((b) => Number(b.dataset.cam));
   try {
     await api(`/api/lenses/${lensEditTarget.id}`,
-      { method: "PUT", body: { camera_ids: ids } });
+      { method: "PUT", body: {
+          camera_ids: ids,
+          serial: $("lens-serial").value.trim(),
+          note: $("lens-note").value.trim() } });
     closeModal("lens-modal");
     await refreshData(); route(); toast("Compatibility saved");
+  } catch (e) { toast(e.message); }
+});
+
+/* Camera inventory popover: serial + note (editable) and compatible
+   lenses (read-only roll-up from the lens assignments). */
+let camInfoTarget = null;
+
+function openCameraInfo(cam) {
+  camInfoTarget = cam;
+  $("camera-info-title").textContent = cam.name;
+  $("camera-serial").value = cam.serial || "";
+  $("camera-note").value = cam.note || "";
+  const fits = state.lenses.filter((l) => lensCompatible(l, cam.id));
+  $("camera-lenses").innerHTML = fits.length
+    ? fits.map((l) => `<li><b>${esc(l.name)}</b>` +
+        (l.serial ? ` <span class="meta">· s/n ${esc(l.serial)}</span>` : "") +
+        (l.note ? `<span class="meta">${esc(l.note)}</span>` : "") + "</li>").join("")
+    : `<li class="meta">No lenses yet — add lenses from the Lenses section.</li>`;
+  openModal("camera-info-modal");
+}
+
+$("camera-info-close").addEventListener("click", () => closeModal("camera-info-modal"));
+$("camera-info-save").addEventListener("click", async () => {
+  if (!camInfoTarget) return;
+  try {
+    await api(`/api/cameras/${camInfoTarget.id}`, { method: "PUT", body: {
+      serial: $("camera-serial").value.trim(),
+      note: $("camera-note").value.trim() } });
+    closeModal("camera-info-modal");
+    await refreshData(); route(); toast("Camera saved");
   } catch (e) { toast(e.message); }
 });
 
@@ -477,6 +515,9 @@ $("view").addEventListener("click", (e) => {
   } else if (act === "edit-lens") {
     const l = state.lenses.find((x) => x.id === Number(btn.dataset.id));
     if (l) openLensEdit(l);
+  } else if (act === "info-camera") {
+    const c = state.cameras.find((x) => x.id === Number(btn.dataset.id));
+    if (c) openCameraInfo(c);
   } else if (act === "add-loc") {
     openLocAdd(Number(btn.dataset.id));
   } else if (act === "del-roll") {
@@ -601,7 +642,7 @@ $("edit-mode-btn").addEventListener("click", () => {
 document.addEventListener("keydown", (e) => {
   if (e.key !== "Escape") return;
   for (const id of ["entry-modal", "roll-modal", "loc-modal", "lens-modal",
-                    "settings-modal"])
+                    "camera-info-modal", "settings-modal"])
     if (!$(id).hidden) { closeModal(id); return; }
   closeDrawer();
 });

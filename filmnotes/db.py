@@ -37,6 +37,8 @@ CREATE TABLE IF NOT EXISTS settings (
 CREATE TABLE IF NOT EXISTS lenses (
   id         INTEGER PRIMARY KEY,
   name       TEXT NOT NULL UNIQUE,
+  serial     TEXT NOT NULL DEFAULT '',
+  note       TEXT NOT NULL DEFAULT '',
   created_at TEXT NOT NULL
 );
 CREATE TABLE IF NOT EXISTS lens_cameras (
@@ -47,6 +49,8 @@ CREATE TABLE IF NOT EXISTS lens_cameras (
 CREATE TABLE IF NOT EXISTS cameras (
   id         INTEGER PRIMARY KEY,
   name       TEXT NOT NULL UNIQUE,
+  serial     TEXT NOT NULL DEFAULT '',
+  note       TEXT NOT NULL DEFAULT '',
   created_at TEXT NOT NULL
 );
 CREATE TABLE IF NOT EXISTS films (
@@ -139,6 +143,12 @@ def _migrate(conn):
     # v0.6: optional lens per roll (lenses live on the cameras page).
     if "lens_id" not in cols("rolls"):
         conn.execute("ALTER TABLE rolls ADD COLUMN lens_id INTEGER")
+    # v0.8: inventory fields (serial + note) on cameras and lenses.
+    for table in ("cameras", "lenses"):
+        for col in ("serial", "note"):
+            if col not in cols(table):
+                conn.execute(f"ALTER TABLE {table} ADD COLUMN {col} "
+                             "TEXT NOT NULL DEFAULT ''")
     conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_rolls_roll_no "
                  "ON rolls(roll_no)")
 
@@ -182,7 +192,8 @@ def set_settings(conn, patch):
 
 def list_cameras(conn):
     return [dict(r) for r in conn.execute(
-        """SELECT c.id, c.name, COUNT(r.id) AS used_count,
+        """SELECT c.id, c.name, c.serial, c.note,
+                  COUNT(r.id) AS used_count,
                   MAX(COALESCE(r.shot_at, r.created_at)) AS last_used
            FROM cameras c LEFT JOIN rolls r ON r.camera_id = c.id
            GROUP BY c.id ORDER BY c.name""")]
@@ -219,7 +230,7 @@ def _lens_camera_ids(conn, lens_id):
 
 def list_lenses(conn):
     lenses = [dict(r) for r in conn.execute(
-        """SELECT l.id, l.name, COUNT(r.id) AS used_count,
+        """SELECT l.id, l.name, l.serial, l.note, COUNT(r.id) AS used_count,
                   MAX(COALESCE(r.shot_at, r.created_at)) AS last_used
            FROM lenses l LEFT JOIN rolls r ON r.lens_id = l.id
            GROUP BY l.id ORDER BY l.name""")]
@@ -254,6 +265,22 @@ def set_lens_cameras(conn, lens_id, camera_ids):
         [(lens_id, cid) for cid in set(camera_ids)])
     conn.commit()
     return get_lens(conn, lens_id)
+
+
+def update_lens(conn, lens_id, patch):
+    """patch keys: serial, note (validated). camera_ids goes through
+    set_lens_cameras."""
+    if get_lens(conn, lens_id) is None:
+        return None
+    return _apply_update(conn, "lenses", "id", lens_id, patch)
+
+
+def update_camera(conn, camera_id, patch):
+    """patch keys: serial, note (validated)."""
+    if conn.execute("SELECT 1 FROM cameras WHERE id=?",
+                    (camera_id,)).fetchone() is None:
+        return None
+    return _apply_update(conn, "cameras", "id", camera_id, patch)
 
 
 def add_lens(conn, name):

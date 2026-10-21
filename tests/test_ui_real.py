@@ -875,3 +875,62 @@ def test_lens_compatibility_filters_dropdown(browser, server):
     assert "50mm f/1.4" in opts and "90mm f/2" in opts
     assert page.errors == []
     page.context.close()
+
+
+def test_roll_modal_two_by_two_grid(browser, server):
+    page = open_page(browser, viewport=MOBILE)
+    page.click("#new-roll-btn")
+    page.wait_for_selector("#roll-modal:visible")
+    boxes = {i: page.locator(f"#{i}").bounding_box()
+             for i in ("roll-no", "roll-film", "roll-camera", "roll-lens")}
+    same_row = lambda a, b: abs(boxes[a]["y"] - boxes[b]["y"]) < 4
+    # row 1: roll number + film; row 2: camera + lens
+    assert same_row("roll-no", "roll-film")
+    assert same_row("roll-camera", "roll-lens")
+    assert boxes["roll-no"]["x"] < boxes["roll-film"]["x"]
+    assert boxes["roll-film"]["y"] < boxes["roll-camera"]["y"]
+    assert page.errors == []
+    page.context.close()
+
+
+def test_camera_inventory_flow(browser, server):
+    page = open_page(browser, viewport=MOBILE)
+    goto_page(page, "cameras")
+    page.click("#lenses-toggle")
+    page.fill("#new-lens", "55mm f/1.2")
+    page.click("#add-lens")
+    page.wait_for_selector("text=55mm f/1.2")
+    # lens serial + note via the lens editor
+    page.click("#edit-mode-btn")
+    page.locator('[data-act="edit-lens"]').first.click()
+    page.wait_for_selector("#lens-modal:visible")
+    page.fill("#lens-serial", "L-55-001")
+    page.fill("#lens-note", "slight haze")
+    page.locator("#lens-cam-list .chip-toggle", has_text="Leica MP").click()
+    page.click("#lens-save")
+    page.wait_for_selector("#lens-modal", state="hidden")
+    # camera serial + note via the info popover; compatible lenses listed
+    page.locator('[data-act="info-camera"]', has_text="").first  # no-op reference
+    mp_card = page.locator("#view .card", has_text="Leica MP").first
+    mp_card.locator('[data-act="info-camera"]').click()
+    page.wait_for_selector("#camera-info-modal:visible")
+    assert page.inner_text("#camera-info-title") == "Leica MP"
+    page.fill("#camera-serial", "1280456")
+    page.fill("#camera-note", "meter recalibrated 2026")
+    page.click("#camera-info-save")
+    page.wait_for_selector("#camera-info-modal", state="hidden")
+    wait_toast(page, "Camera saved")
+    # reopen: values persisted, compatible lens shows with serial + note
+    mp_card.locator('[data-act="info-camera"]').click()
+    page.wait_for_selector("#camera-info-modal:visible")
+    assert page.input_value("#camera-serial") == "1280456"
+    assert "meter recalibrated" in page.input_value("#camera-note")
+    lenses_txt = page.inner_text("#camera-lenses")
+    assert "55mm f/1.2" in lenses_txt and "L-55-001" in lenses_txt
+    assert "slight haze" in lenses_txt
+    # the info button is visible WITHOUT edit mode too
+    page.keyboard.press("Escape")
+    page.click("#edit-mode-btn")  # turn edit mode off
+    assert mp_card.locator('[data-act="info-camera"]').is_visible()
+    assert page.errors == []
+    page.context.close()

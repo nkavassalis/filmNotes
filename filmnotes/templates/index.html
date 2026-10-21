@@ -65,14 +65,24 @@
 <section id="roll-modal" class="modal" hidden aria-label="New roll">
   <div class="modal-card">
     <h2 id="roll-title">New Roll</h2>
-    <label for="roll-no">Roll number <span class="opt">(blank = auto)</span></label>
-    <input id="roll-no" placeholder="auto" autocomplete="off" maxlength="20">
-    <label for="roll-camera">Camera</label>
-    <select id="roll-camera"></select>
-    <label for="roll-film">Film type</label>
-    <select id="roll-film"></select>
-    <label for="roll-lens">Lens <span class="opt">(optional)</span></label>
-    <select id="roll-lens"></select>
+    <div class="field-grid">
+      <div class="field">
+        <label for="roll-no">Roll number <span class="opt">(blank = auto)</span></label>
+        <input id="roll-no" placeholder="auto" autocomplete="off" maxlength="20">
+      </div>
+      <div class="field">
+        <label for="roll-film">Film type</label>
+        <select id="roll-film"></select>
+      </div>
+      <div class="field">
+        <label for="roll-camera">Camera</label>
+        <select id="roll-camera"></select>
+      </div>
+      <div class="field">
+        <label for="roll-lens">Lens <span class="opt">(optional)</span></label>
+        <select id="roll-lens"></select>
+      </div>
+    </div>
     <div id="roll-loc-group">
       <label for="roll-location">Location</label>
       <div class="field-row">
@@ -136,12 +146,40 @@
 <section id="lens-modal" class="modal" hidden aria-label="Lens compatibility">
   <div class="modal-card">
     <h2 id="lens-modal-title">Lens</h2>
+    <div class="field-grid">
+      <div class="field">
+        <label for="lens-serial">Serial #</label>
+        <input id="lens-serial" autocomplete="off" maxlength="60" placeholder="—">
+      </div>
+    </div>
+    <label for="lens-note">Note</label>
+    <textarea id="lens-note" rows="2" placeholder="quirks, hood, caps..."></textarea>
     <p class="muted-hint">Pick the cameras this lens fits. Leave all off to
       keep it compatible with every camera.</p>
     <div id="lens-cam-list" class="chip-row"></div>
     <div class="modal-actions">
       <button id="lens-cancel" class="btn ghost">Cancel</button>
       <button id="lens-save" class="btn primary">Save</button>
+    </div>
+  </div>
+</section>
+
+<section id="camera-info-modal" class="modal" hidden aria-label="Camera details">
+  <div class="modal-card">
+    <h2 id="camera-info-title">Camera</h2>
+    <div class="field-grid">
+      <div class="field">
+        <label for="camera-serial">Serial #</label>
+        <input id="camera-serial" autocomplete="off" maxlength="60" placeholder="—">
+      </div>
+    </div>
+    <label for="camera-note">Note</label>
+    <textarea id="camera-note" rows="2" placeholder="servicing, quirks, light seals..."></textarea>
+    <label>Compatible lenses</label>
+    <ul id="camera-lenses" class="sublist"></ul>
+    <div class="modal-actions">
+      <button id="camera-info-close" class="btn ghost">Close</button>
+      <button id="camera-info-save" class="btn primary">Save</button>
     </div>
   </div>
 </section>

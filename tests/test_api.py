@@ -558,3 +558,35 @@ def test_lens_compatibility_api(client):
                       json={"camera_ids": [1, "2"]}).status_code == 400
     assert client.put("/api/lenses/99999",
                       json={"camera_ids": []}).status_code == 404
+
+
+# ---------------------------------------------------------------- inventory
+
+def test_camera_inventory_api(client):
+    cam = get_json(client.get("/api/cameras"))[0]
+    assert cam["serial"] == "" and cam["note"] == ""
+    r = client.put(f"/api/cameras/{cam['id']}",
+                   json={"serial": "1080123", "note": "meter recalibrated"})
+    assert r.status_code == 200
+    out = get_json(r)
+    assert out["serial"] == "1080123" and out["note"] == "meter recalibrated"
+    assert client.put("/api/cameras/99999", json={"serial": "x"}).status_code == 404
+    assert client.put(f"/api/cameras/{cam['id']}", json={}).status_code == 400
+    assert client.put(f"/api/cameras/{cam['id']}",
+                      json={"serial": "x" * 61}).status_code == 400
+
+
+def test_lens_inventory_api(client):
+    lens = get_json(client.post("/api/lenses", json={"name": "45mm"}))
+    # serial/note alone, camera_ids alone, and both together
+    assert get_json(client.put(f"/api/lenses/{lens['id']}",
+        json={"serial": "9912", "note": "clean"}))["serial"] == "9912"
+    cams = [c["id"] for c in get_json(client.get("/api/cameras"))[:1]]
+    out = get_json(client.put(f"/api/lenses/{lens['id']}",
+                              json={"camera_ids": cams}))
+    assert out["camera_ids"] == cams and out["serial"] == "9912"  # kept
+    out = get_json(client.put(f"/api/lenses/{lens['id']}",
+        json={"camera_ids": [], "serial": "", "note": "hazy"}))
+    assert out["camera_ids"] == [] and out["serial"] == "" and out["note"] == "hazy"
+    assert client.put(f"/api/lenses/{lens['id']}", json={}).status_code == 400
+    assert client.put("/api/lenses/99999", json={"serial": "x"}).status_code == 404

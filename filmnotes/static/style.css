@@ -172,6 +172,25 @@ body.edit-mode .entry-edit { visibility: visible; }
 }
 .chip.loc { color: var(--accent); font-weight: 600; }
 
+/* inline info (ⓘ) button on camera cards — inventory details */
+.info-btn {
+  display: inline-grid; place-items: center;
+  width: 22px; height: 22px; border-radius: 50%;
+  border: 1px solid var(--line); color: var(--muted);
+  font-size: 12px; font-weight: 700; vertical-align: middle;
+  margin-left: 6px; padding: 0;
+}
+.info-btn:active { background: var(--surface2); color: var(--accent); }
+
+/* two-up field rows in popovers (roll no + film / camera + lens) */
+.field-grid {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 0 12px;
+}
+.field-grid .field {
+  min-width: 0;
+  display: flex; flex-direction: column; justify-content: flex-end;
+}
+
 /* lens compatibility editor: toggleable camera chips */
 .muted-hint { color: var(--muted); font-size: 13px; margin: 4px 0 10px; }
 .chip-row { display: flex; flex-wrap: wrap; gap: 8px; }

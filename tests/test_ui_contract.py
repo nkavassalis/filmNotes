@@ -92,3 +92,10 @@ def test_lens_compatibility_wiring():
     assert 'id="lens-modal"' in TEMPLATE and 'id="lens-cam-list"' in TEMPLATE
     assert "edit-lens" in SCRIPT and "openLensEdit" in SCRIPT
     assert "chip-toggle" in CSS and "lensCompatible" in SCRIPT
+
+
+def test_roll_modal_grid_and_inventory():
+    assert "field-grid" in TEMPLATE and ".field-grid" in CSS
+    assert 'id="camera-info-modal"' in TEMPLATE
+    assert "info-camera" in SCRIPT and "openCameraInfo" in SCRIPT
+    assert "lens-serial" in TEMPLATE and "camera-serial" in TEMPLATE

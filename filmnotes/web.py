@@ -206,6 +206,21 @@ def create_app(db_path, conn=None):
         name = _str(data, "name", required=True)
         return jsonify(db.add_camera(conn, name)), 201
 
+    @app.put("/api/cameras/<int:camera_id>")
+    def api_edit_camera(camera_id):
+        data = _body()
+        patch = {}
+        if "serial" in data:
+            patch["serial"] = _str(data, "serial", max_len=60)
+        if "note" in data:
+            patch["note"] = _note(data)
+        if not patch:
+            raise BadRequest("no known fields in body")
+        cam = db.update_camera(conn, camera_id, patch)
+        if cam is None:
+            return jsonify(error="camera not found"), 404
+        return jsonify(cam)
+
     # ------------------------------------------------------------ lenses
 
     @app.get("/api/lenses")
@@ -221,16 +236,29 @@ def create_app(db_path, conn=None):
     @app.put("/api/lenses/<int:lens_id>")
     def api_edit_lens(lens_id):
         data = _body()
-        ids = data.get("camera_ids")
-        if not isinstance(ids, list) \
-                or any(not isinstance(c, int) or isinstance(c, bool) for c in ids):
-            raise BadRequest("camera_ids must be a list of integers")
-        try:
-            lens = db.set_lens_cameras(conn, lens_id, ids)
-        except ValueError:
-            raise BadRequest("unknown camera_id")
+        patch = {}
+        if "serial" in data:
+            patch["serial"] = _str(data, "serial", max_len=60)
+        if "note" in data:
+            patch["note"] = _note(data)
+        lens = None
+        if patch:
+            lens = db.update_lens(conn, lens_id, patch)
+            if lens is None:
+                return jsonify(error="lens not found"), 404
+        if "camera_ids" in data:
+            ids = data["camera_ids"]
+            if not isinstance(ids, list) \
+                    or any(not isinstance(c, int) or isinstance(c, bool) for c in ids):
+                raise BadRequest("camera_ids must be a list of integers")
+            try:
+                lens = db.set_lens_cameras(conn, lens_id, ids)
+            except ValueError:
+                raise BadRequest("unknown camera_id")
+            if lens is None:
+                return jsonify(error="lens not found"), 404
         if lens is None:
-            return jsonify(error="lens not found"), 404
+            raise BadRequest("no known fields in body")
         return jsonify(lens)
 
     # ------------------------------------------------------------ films

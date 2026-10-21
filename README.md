@@ -29,8 +29,8 @@ installs to the home screen, and keeps everything on your own server.
   cameras** (toggle chips): the lens then only appears in the dropdown
   for those cameras. A lens with none picked fits **every** camera —
   assignments narrow, they never gate.
-- **New Roll** (bottom bar) — popover with Camera, Film, and (optional)
-  Lens dropdowns, a
+- **New Roll** (bottom bar) — compact popover: **roll number + film on
+  the first row, camera + lens on the second**, then a
   Location field with a friendly name derived from the device location
   service (tap the crosshair to detect; the field is always editable so
   you can override with your own name), a **Shot on** date/time (defaults
@@ -67,6 +67,13 @@ installs to the home screen, and keeps everything on your own server.
   "Dates show time" toggle (Hide/Show) if you want the full timestamp.
 - **Settings** (cog, top right) — UI theme: Auto (follows the system),
   Light, or Dark. Stored server-side, so every device you use agrees.
+- **Inventory** — every camera and lens can carry a **serial #** and a
+  **note** (servicing history, quirks, light seals...). Tap the little
+  **ⓘ** on a camera card to see and edit its serial and note, plus a
+  roll-up of all lenses compatible with it (with their serials and
+  notes). Lens serials and notes are edited from the lens editor (edit
+  mode pencil). These details stay in the inventory popover — the rest
+  of the UI stays clean.
 - **Pages drawer** — hamburger (top left) or swipe from the left edge
   exposes Rolls / Locations / Cameras / Film (no heading, just the list).
 - **Bottom bar** — New Roll and New Location, pinned across every screen.
