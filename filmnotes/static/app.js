@@ -842,6 +842,11 @@ function showDbg() {
     "env(safe-area-inset-bottom);visibility:hidden;pointer-events:none";
   document.body.appendChild(probe);
   const bar = document.getElementById("bottombar");
+  const vhP = document.createElement("div");
+  vhP.style.cssText = "position:absolute;top:-9999px;height:100vh;width:1px";
+  const dvhP = document.createElement("div");
+  dvhP.style.cssText = "position:absolute;top:-9999px;height:100dvh;width:1px";
+  document.body.appendChild(vhP); document.body.appendChild(dvhP);
   const box = document.createElement("div");
   box.style.cssText = "position:fixed;top:4px;left:4px;z-index:9999;" +
     "font:9px/1.3 monospace;color:#b4551f;background:rgba(0,0,0,.6);" +
@@ -853,6 +858,9 @@ function showDbg() {
       screen: [screen.width, screen.height], dpr: devicePixelRatio,
       inner: [innerWidth, innerHeight], vv: Math.round(visualViewport.height),
       barBottom: Math.round(r.bottom), safeB: sb,
+      vh: Math.round(vhP.getBoundingClientRect().height),
+      dvh: Math.round(dvhP.getBoundingClientRect().height),
+      barCssBottom: bar ? getComputedStyle(bar).bottom : null,
       tc: document.querySelector("meta[name=theme-color]")?.content,
       standalone: matchMedia("(display-mode: standalone)").matches ||
                   !!navigator.standalone,
@@ -860,8 +868,8 @@ function showDbg() {
     box.textContent = [
       `screen ${m.screen[0]}x${m.screen[1]} dpr ${m.dpr}`,
       `inner ${m.inner[0]}x${m.inner[1]}`,
-      `vv ${m.vv}`,
-      `bar.bottom ${m.barBottom}`,
+      `vh ${m.vh} dvh ${m.dvh}`,
+      `bar.bottom ${m.barBottom} css ${m.barCssBottom}`,
       `safe-b ${m.safeB}`,
       `tc ${m.tc}`,
       `standalone ${m.standalone}`,

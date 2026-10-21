@@ -226,6 +226,13 @@ body.edit-mode .add-loc { display: block; }
    positioning pins it to the physical bottom; #view pads for its height. */
 #bottombar {
   position: fixed; left: 0; right: 0; bottom: 0; z-index: 30;
+  /* iOS 26 standalone: the layout viewport (dvh) ends ~62pt above the
+     physical bottom while 100vh (large viewport) reaches the screen edge.
+     bottom:0 pinned the bar to the short viewport and created the dead
+     strip (telemetry 2026-10-21: inner 812 vs screen 874). Push it down
+     by the letterbox gap; where dvh==vh this is 0 (no-op everywhere
+     else). Engines without dvh keep bottom:0 above. */
+  bottom: calc(100dvh - 100vh);
   display: flex;
   background: var(--surface);
   border-top: 1px solid var(--line);
