@@ -18,6 +18,8 @@ from pathlib import Path
 
 import pytest
 
+from filmnotes import db
+
 pytestmark = pytest.mark.ui
 
 try:
@@ -92,11 +94,30 @@ def server(tmp_path):
         pytest.fail("server did not start: " +
                     proc.stdout.read().decode()[-2000:])
     # identity check: this must be OUR throwaway server, not the box's real
-    # one that won a bind race (a fresh db has seed gear but zero rolls)
+    # one that won a bind race. Fingerprint EVERY seeded table and the
+    # inventory fields — a 2026-10-21 leak wrote rolls AND camera/lens
+    # serials/notes AND lens_cameras rows into the real db, and a rolls-only
+    # check missed the rest. A fresh db is exactly the seed: 6 cameras with
+    # empty serial/note, 15 films with empty note, no lenses/locations/rolls.
     import json as _json
-    rolls = _json.load(urllib.request.urlopen(f"{BASE}/api/rolls", timeout=2))
-    assert rolls == [], ("port is served by something that is not the test "
-                         f"server (rolls={rolls!r}) — real server leaked in")
+    def _get(ep):
+        return _json.load(urllib.request.urlopen(f"{BASE}/api/{ep}", timeout=2))
+    cams, films = _get("cameras"), _get("films")
+    problems = []
+    if sorted(c["name"] for c in cams) != sorted(db.SEED_CAMERAS):
+        problems.append(f"cameras={[c['name'] for c in cams]}")
+    if any(c["serial"] or c["note"] for c in cams):
+        problems.append("camera serial/note populated")
+    if sorted(f["name"] for f in films) != sorted(db.SEED_FILMS):
+        problems.append(f"films={[f['name'] for f in films]}")
+    if any(f.get("note") for f in films):
+        problems.append("film note populated")
+    for ep in ("rolls", "lenses", "locations"):
+        if _get(ep) != []:
+            problems.append(f"{ep} not empty")
+    assert not problems, ("port is served by something that is not the test "
+                          f"server ({'; '.join(problems)}) — real server "
+                          "leaked in")
     yield proc
     proc.terminate()
     try:

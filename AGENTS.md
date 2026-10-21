@@ -359,9 +359,17 @@ the ui tier fails with "Executable doesn't exist" and you must
   db while the watchdog held the port; MRU then surfaced gear the user
   never used. Cleaned by hand (rolls 8-16, lenses 7-9, camera 'Contax T2',
   film 'Cinestill 800T', locations 8-14); pre-cleanup backup
-  `filmnotes-2026-10-21_1333.sqlite.gz`. The `.no-serve` flag + fresh-db
-  identity assertion in the ui fixture prevent recurrence — never weaken
-  them.
+  `filmnotes-2026-10-21_1333.sqlite.gz`. **Follow-up leak found later:**
+  the same runs also wrote inventory FIELDS (Leica MP serial '1280456' +
+  note 'meter recalibrated 2026'; 90/2.8 serial 'L-55-001' + note 'slight
+  haze') and a `lens_cameras` row (90/2.8 -> Leica MP) — the first cleanup
+  missed them. Purged (backup `..._1439`), and 90/2.8 was then assigned
+  Pentax-67-only at Nick's request. **Lesson: a leak cleanup must
+  enumerate every table AND column the suite writes, junction tables and
+  PUT-edited fields included.** The ui fixture's identity assertion now
+  fingerprints ALL seed tables + inventory fields (cameras/films == seed
+  with empty serial/note; rolls/lenses/locations empty), so a real-server
+  leak fails loudly on any surface, not just rolls. Never weaken it.
 - Multi-device theme sync is verified only via reload on one context.
 
 ## Do-not-touch list
