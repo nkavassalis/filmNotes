@@ -70,7 +70,11 @@ python3 -m venv .venv && .venv/bin/pip install -r requirements.txt \
 # topology (rssgate/sparky pattern). Verify with ss -tlnp, NOT pgrep -f
 # (self-match scar — see the long-running-services skill in ~/meta).
 .venv/bin/python -m pytest              # hermetic tier (default; -m "not ui")
-.venv/bin/python -m pytest -m ui        # browser tier; needs port 8961 free
+.venv/bin/python -m pytest -m ui        # browser tier; the module fixture
+#   raises .no-serve (honoured by scripts/serve-loop.sh and the
+#   profile.d/cron ensure scripts), kills any live loop/server, runs, then
+#   clears the flag and restarts the loop — safe to run with the watchdog
+#   live. .no-serve left behind after a crash = delete it by hand.
 ```
 
 Pin the venv's `playwright` to the version whose chromium build is already
@@ -332,8 +336,15 @@ the ui tier fails with "Executable doesn't exist" and you must
   "empty space below the bottom bar" in the iOS simulator was traced to
   `html` lacking a background (the 100dvh-vs-webview strip showed the
   white canvas). Fix: `html` now paints `var(--bg)` and body has a
-  `100vh` fallback. Playwright/Chromium cannot reproduce the iOS
-  standalone quirk; confirm in the simulator or on the phone.
+  `100vh` fallback. **Regression on real hardware (iPhone 18 Pro, iOS
+  26, screenshot 2026-10-21): a ~100pt dead strip in `--bg` colour still
+  appeared below the fixed bar** — `bottom:0` pins to a layout viewport
+  that ends above the physical bottom there. Second-layer fix applied:
+  `#bottombar::after` paints `--surface` 30vh past the bar's bottom edge
+  (covers an inside-webview strip) and the manifest `background_color`
+  became `#1e1c1a` (the bar colour, covers an outside-webview window
+  strip). Playwright cannot reproduce this; **ask Nick to re-screenshot
+  the Locations page on the 18 Pro after reinstalling/refreshing.**
 - Geolocation *denial* UX (permission prompt dismissed) shows the toast
   fallback; only the success and network-failure paths are automated.
 - Multi-device theme sync is verified only via reload on one context.

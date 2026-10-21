@@ -7,6 +7,9 @@ console errors. Screenshots land in tests/screenshots/ for eyeballing.
 Run explicitly:  .venv/bin/python -m pytest -m ui
 Auto-skips when playwright/chromium is not installed.
 """
+import os
+import re
+import signal
 import socket
 import subprocess
 import sys
@@ -43,8 +46,33 @@ def _free_port_ok():
         return s.connect_ex(("127.0.0.1", PORT)) != 0
 
 
+# The box runs a supervised loop + cron/login watchdog that keep a server on
+# PORT (scripts/serve-loop.sh). UI tests own the port, so the fixture raises
+# a .no-serve maintenance flag (honoured by the ensure script and the loop),
+# kills any live loop/server, and restores everything on teardown.
+NO_SERVE = ROOT / ".no-serve"
+LOOP = "scripts/serve-loop.sh"
+
+
+def _kill_serving():
+    subprocess.run(["pkill", "-f", LOOP], capture_output=True)
+    ss = subprocess.run(["ss", "-tlnp"], capture_output=True, text=True).stdout
+    for line in ss.splitlines():
+        if f":{PORT} " in line:
+            for pid in re.findall(r"pid=(\d+)", line):
+                try:
+                    os.kill(int(pid), signal.SIGTERM)
+                except (ProcessLookupError, PermissionError):
+                    pass
+
+
 @pytest.fixture()
 def server(tmp_path):
+    _kill_serving()
+    for _ in range(50):  # let SIGTERM land
+        if _free_port_ok():
+            break
+        time.sleep(0.1)
     assert _free_port_ok(), f"port {PORT} already in use; stop it before -m ui"
     SHOTS.mkdir(exist_ok=True)
     proc = subprocess.Popen(
@@ -63,12 +91,34 @@ def server(tmp_path):
         proc.kill()
         pytest.fail("server did not start: " +
                     proc.stdout.read().decode()[-2000:])
+    # identity check: this must be OUR throwaway server, not the box's real
+    # one that won a bind race (a fresh db has seed gear but zero rolls)
+    import json as _json
+    rolls = _json.load(urllib.request.urlopen(f"{BASE}/api/rolls", timeout=2))
+    assert rolls == [], ("port is served by something that is not the test "
+                         f"server (rolls={rolls!r}) — real server leaked in")
     yield proc
     proc.terminate()
     try:
         proc.wait(timeout=5)
     except subprocess.TimeoutExpired:
         proc.kill()
+
+
+@pytest.fixture(scope="module", autouse=True)
+def _maintenance_mode():
+    """Own the port for the whole module: raise the box's .no-serve flag
+    (honoured by scripts/serve-loop.sh and the profile.d/cron ensure
+    scripts), tear down any live loop/server, and hand everything back
+    only when the module is done (per-test restarts raced the loop)."""
+    NO_SERVE.touch()
+    _kill_serving()
+    yield
+    NO_SERVE.unlink(missing_ok=True)
+    # hand the port back to the box's supervised loop (if installed)
+    if (ROOT / LOOP).exists():
+        subprocess.Popen([str(ROOT / LOOP)], cwd=ROOT, stdout=subprocess.DEVNULL,
+                         stderr=subprocess.DEVNULL, start_new_session=True)
 
 
 @pytest.fixture(scope="module")

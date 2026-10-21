@@ -9,3 +9,4 @@ filmnotes.log
 .env*
 tests/screenshots/
 backups/
+.no-serve

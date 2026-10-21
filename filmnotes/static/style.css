@@ -231,6 +231,19 @@ body.edit-mode .add-loc { display: block; }
   border-top: 1px solid var(--line);
   padding-bottom: env(safe-area-inset-bottom);
 }
+/* iPhone 18 Pro / iOS 26 standalone: fixed bottom:0 pinned to a layout
+   viewport ending ~100pt above the physical bottom, leaving a --bg dead
+   strip under the bar (screenshot 2026-10-21). Paint past our own bottom
+   edge so any inside-webview strip takes the bar colour; the manifest
+   background_color (window background, outside the webview) is the other
+   half of this fix. */
+#bottombar::after {
+  content: "";
+  position: absolute; top: 100%; left: 0; right: 0;
+  height: 30vh;
+  background: var(--surface);
+  pointer-events: none;
+}
 body.settings-open #bottombar { display: none; }  /* spec: hidden only for settings */
 .bar-tab {
   flex: 1;

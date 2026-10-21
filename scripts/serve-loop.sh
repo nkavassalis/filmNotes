@@ -9,6 +9,8 @@
 # /etc/profile.d/zz-ensure-filmnotes.sh does this at every login.
 cd "$(dirname "${BASH_SOURCE[0]}")/.." || exit 1
 while true; do
+  # maintenance flag: UI tests (or a human) own the port while this exists
+  [ -e .no-serve ] && exit 0
   # adopt an existing listener instead of double-launching (e.g. an
   # orphaned server still holding the port after the loop was restarted)
   if ss -tln 2>/dev/null | grep -q ':8961 '; then
