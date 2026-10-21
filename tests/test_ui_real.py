@@ -107,6 +107,15 @@ def shot(page, name):
     page.screenshot(path=str(SHOTS / f"{name}.png"))
 
 
+def wait_toast(page, text):
+    """Toast auto-hides after 2.6s, so a plain :visible wait can catch the
+    PREVIOUS action's toast. Wait for the toast to actually say `text`."""
+    page.wait_for_function(
+        "([t]) => { const el = document.getElementById('toast');\n"
+        "  return el && !el.hidden && el.textContent.includes(t); }",
+        arg=text)
+
+
 def api_put_theme(page, theme):
     page.request.put(f"{BASE}/api/settings", data={"theme": theme},
                      headers={"Content-Type": "application/json"})
@@ -319,8 +328,7 @@ def test_custom_roll_numbers_ui(browser, server):
     assert page.input_value("#roll-no") == "2"
     page.fill("#roll-no", "24A")
     page.click("#roll-save")
-    page.wait_for_selector("#toast:visible")
-    assert "already in use" in page.inner_text("#toast")
+    wait_toast(page, "already in use")
     assert page.is_visible("#roll-modal")  # still open, nothing lost
     page.fill("#roll-no", "73-C")
     page.click("#roll-save")
@@ -679,7 +687,7 @@ def test_delete_roll_with_confirm(browser, server):
     page.locator('[data-act="del-roll"]').first.click()
     page.wait_for_function("document.querySelectorAll('#view .card').length === 1")
     assert "Roll #" in seen["msg"] and "cannot be undone" in seen["msg"]
-    assert "deleted" in page.inner_text("#toast")
+    wait_toast(page, "deleted")
     assert page.errors == []
     page.context.close()
 
@@ -692,8 +700,7 @@ def test_delete_locations_guarded_then_free(browser, server):
     page.on("dialog", lambda d: d.accept())
     # in-use locations refuse deletion even after confirming
     page.locator('[data-act="del-loc"]').first.click()
-    page.wait_for_selector("#toast:visible")
-    assert "rolls still use" in page.inner_text("#toast")
+    wait_toast(page, "rolls still use")
     assert page.locator("#view .card").count() == 1
     # once no roll references it, the same delete succeeds
     goto_page(page, "rolls")
