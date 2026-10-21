@@ -332,22 +332,26 @@ the ui tier fails with "Executable doesn't exist" and you must
   wiring (manifest, standalone, icons, safe areas) is contract-tested and
   Chromium-rendered, but Add-to-Home-Screen on an actual iPhone behind the
   tunnel is a manual check.
-- **iOS standalone bottom-gap fix is unverified on a device** — the
-  "empty space below the bottom bar" in the iOS simulator was traced to
-  `html` lacking a background (the 100dvh-vs-webview strip showed the
-  white canvas). Fix: `html` now paints `var(--bg)` and body has a
-  `100vh` fallback. **iPhone 18 Pro / iOS 26 (2026-10-21): a ~46pt strip
-  in the page colour persisted below the fixed bar.** Pixel-sampling the
-  user's screenshots settled it: the strip is `#141311` = the head
-  `theme-color` value, NOT the manifest `background_color` (which the
-  phone had already refetched per the server log) — iOS paints the
-  outside-webview home-indicator zone from `theme-color`. Fix: the
-  `theme-color` meta is now rendered from the theme (light `#ffffff`,
-  otherwise `#1e1c1a` = the bottom-bar colour), so the zone blends with
-  the bar. `#bottombar::after` skirt + manifest `background_color` are
-  kept as inside-webview layers. **Playwright cannot reproduce any of
-  this — ask Nick to just reopen the app (no reboot/reinstall ritual
-  needed; the shell is no-cache) and re-screenshot.**
+- **iOS standalone dead strip — RESOLVED 2026-10-21 (iPhone 18 Pro /
+  iOS 26).** Root cause, established by on-device telemetry (a temporary
+  overlay POSTing geometry to `/api/dbg`): the legacy head tags
+  `viewport-fit=cover` + `apple-mobile-web-app-status-bar-style:
+  black-translucent` made iOS 26 letterbox the standalone webview 62pt
+  above the physical bottom (`inner 812` vs `screen 874`, webview CLIPS
+  at 812 — content cannot extend into the zone). `~/rssgate`, same phone,
+  same iOS, renders edge-to-edge with a plain head — the control case
+  that ended six wrong theories (html bg, fixed bottom:0, ::after skirt,
+  manifest background_color, theme-color, stale install record). The head
+  now mirrors rssgate: `width=device-width, initial-scale=1`, no
+  viewport-fit, no apple-mobile-web-app-* tags — **the contract test
+  asserts their ABSENCE; do not re-add them from PWA checklists.**
+  Kept layers: `theme-color` = bottom-bar colour (server-rendered AND in
+  `applyTheme()` — client JS had been clobbering the meta every boot),
+  `#bottombar::after` skirt, `padding-bottom:
+  max(12px, calc(env(safe-area-inset-bottom) - 100vh + 100dvh)))`. The
+  debug overlay + `/api/dbg` were removed after confirmation (see git
+  history for the telemetry pattern — it is the right tool for device-
+  only layout bugs; Playwright cannot reproduce any of this).
 - Geolocation *denial* UX (permission prompt dismissed) shows the toast
   fallback; only the success and network-failure paths are automated.
 - **Incident 2026-10-21:** two broken `-m ui` runs (before the fixture's
