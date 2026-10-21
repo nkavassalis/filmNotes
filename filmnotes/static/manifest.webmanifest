@@ -2,7 +2,7 @@
   "name": "filmNotes",
   "short_name": "filmNotes",
   "description": "Field notes for film photography: rolls, locations, cameras, film",
-  "start_url": "/",
+  "start_url": "/?v=2",
   "display": "standalone",
   "background_color": "#1e1c1a",
   "theme_color": "#b4551f",

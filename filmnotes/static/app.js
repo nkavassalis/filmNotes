@@ -884,3 +884,4 @@ function showDbg() {
   paint();
   addEventListener("resize", paint);
 }
+// bump 2026-10-21b: asset-hash churn to force a fresh manifest fetch (stale iOS install record).
