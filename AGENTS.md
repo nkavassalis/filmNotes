@@ -159,7 +159,11 @@ the ui tier fails with "Executable doesn't exist" and you must
   The note the user types is the note for THAT roll at THAT place (lives
   on the junction row, not on `locations.note`). `attach_location` is an
   upsert: re-adding updates the entry, a blank note never erases an
-  existing one, visited_at defaults to the roll's shot date. With no rolls
+  existing one, visited_at defaults to the roll's shot date AT THE DB LAYER
+  only — the UI ALWAYS prefills the visit time with NOW and sends it
+  explicitly (Nick 2026-10-21: prefilling the roll's shot date surfaced as
+  "time was yesterday" when logging onto a days-old roll; do not revert).
+  With no rolls
   at all, New Location creates a standalone place and the note falls back
   to `locations.note`. `add_roll` links the roll's first location. The old
   `rolls.location_id` column is migrated away (backfill + drop).
