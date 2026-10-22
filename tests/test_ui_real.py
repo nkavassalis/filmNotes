@@ -606,6 +606,29 @@ def test_new_location_visit_date_override(browser, server):
     page.context.close()
 
 
+def test_new_location_defaults_to_now_not_roll_time(browser, server):
+    # regression (Nick 2026-10-21): attached to a roll shot yesterday, the
+    # visit field used to prefill the ROLL's shot time; must be NOW
+    page = open_page(browser, viewport=MOBILE)
+    page.click("#new-roll-btn")
+    page.wait_for_selector("#roll-modal:visible")
+    page.fill("#roll-shot", "2024-06-01T09:00")
+    page.fill("#roll-location", "Old Roll Field")
+    page.select_option("#roll-camera", index=0)
+    page.select_option("#roll-film", index=0)
+    page.click("#roll-save")
+    page.wait_for_selector("#roll-modal", state="hidden")
+    page.wait_for_selector("#view .card")
+    page.click("#new-location-btn")
+    page.wait_for_selector("#loc-modal:visible")
+    from datetime import datetime
+    today = datetime.now().strftime("%Y-%m-%d")
+    val = page.input_value("#loc-shot")
+    assert val.startswith(today), f"visit prefill {val!r} is not today"
+    assert not val.startswith("2024")
+    page.context.close()
+
+
 def test_location_detect_via_geolocation(browser, server):
     page = open_page(
         browser, viewport=MOBILE,

@@ -517,7 +517,10 @@ async function openLocAdd(rollId) {
     $("loc-name").value = "";
     $("loc-note").value = "";
     /* attaching to a roll? default the visit to its shot date */
-    $("loc-shot").value = target ? target.shot_at.replace(" ", "T") : dtLocalNow();
+    // visit time always defaults to NOW: the roll's shot_at may be days old
+  // (Nick 2026-10-21: "time was set to some time yesterday") — you are
+  // standing at the location when you press this; edit if backfilling
+  $("loc-shot").value = dtLocalNow();
     state.lastFix = null;
     resetLocModal("new");
     if (rollId != null) edit = { kind: "addloc", rollId };
@@ -544,7 +547,7 @@ function openEntryEdit(rollId, locId) {
   $("entry-place").innerHTML = `Roll #${esc(roll.roll_no)} · <b>${esc(entry.name)}</b>`;
   fillDatalist();
   $("entry-location").value = entry.name;
-  $("entry-shot").value = (entry.visited_at || roll.shot_at || "").replace(" ", "T");
+  $("entry-shot").value = (entry.visited_at || "").replace(" ", "T") || dtLocalNow();
   $("entry-note").value = entry.note || "";
   edit = { kind: "entry", rollId, locId, name: entry.name };
   openModal("entry-modal");
