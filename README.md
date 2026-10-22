@@ -125,6 +125,20 @@ area, nature reserve, provincial park — and falls back to the nearest
 town; if the phone can't reach nominatim.openstreetmap.org the field falls
 back to raw coordinates — you can always type the name.
 
+### Offline (out of coverage)
+
+Once you have opened the app at least once with signal, it keeps working
+with none: a service worker caches the app shell and your last-seen data,
+so the home-screen app OPENS in the backcountry and you can browse rolls
+and locations. New rolls/locations created offline are queued on the phone
+(the card shows greyed "pending" rows, the topbar shows an Offline badge)
+and replay automatically when signal returns — with an idempotency key so
+a flaky retry can never double-create a roll. Edits and deletes made
+offline also queue and land on sync. GPS works without cell, so the
+crosshair still records coordinates; the place *name* falls back to
+"lat, lon" until you're back (type it, or edit it later — the coordinates
+survive).
+
 ## Running the tests
 
 ```

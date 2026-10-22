@@ -1120,3 +1120,50 @@ def test_gear_pages_info_and_guarded_delete(browser, server):
     assert "28mm f/2.8" not in page.inner_text("#view")
     assert page.errors == []
     page.context.close()
+
+
+# ------------------------------------------------------------- offline (2026-10-21)
+
+def test_pwa_opens_offline(browser, server):
+    # Nick was out of coverage and the app "didn't load at all": once the
+    # SW has activated, a full reload with ZERO network must still render
+    # the shell and the last-seen data.
+    page = open_page(browser, viewport=MOBILE)
+    page.evaluate("() => navigator.serviceWorker.ready")
+    page.reload()                       # boot GETs now flow through the SW
+    page.wait_for_selector("#bottombar:visible")
+    page.goto(BASE + "/#/cameras")
+    page.wait_for_selector("#view .card")
+    page.context.set_offline(True)
+    page.reload()
+    page.wait_for_selector("#view .card", timeout=8000)
+    assert "Offline" in page.inner_text("#offline-badge")
+    page.context.set_offline(False)
+    page.wait_for_selector("#offline-badge", state="hidden", timeout=8000)
+    assert page.errors == []
+    page.context.close()
+
+
+def test_offline_write_queues_and_syncs(browser, server):
+    page = open_page(browser, viewport=MOBILE)
+    page.evaluate("() => navigator.serviceWorker.ready")
+    page.reload()                       # prime the API cache through the SW
+    page.wait_for_selector("#bottombar:visible")
+    page.click("#new-roll-btn")
+    page.wait_for_selector("#roll-modal:visible")
+    page.context.set_offline(True)
+    page.fill("#roll-location", "Backcountry Hollow")
+    page.select_option("#roll-camera", index=0)
+    page.select_option("#roll-film", index=0)
+    page.click("#roll-save")
+    page.wait_for_selector("#roll-modal", state="hidden")
+    page.wait_for_selector(".card.pending", timeout=8000)
+    assert "pending" in page.inner_text("#offline-badge")
+    page.context.set_offline(False)     # 'online' event triggers replay
+    page.wait_for_selector(".card.pending", state="hidden", timeout=10000)
+    import urllib.request, json
+    rolls = json.load(urllib.request.urlopen(f"{BASE}/api/rolls"))
+    assert any(r["locations"] and
+               r["locations"][0]["name"] == "Backcountry Hollow" for r in rolls)
+    assert page.errors == []
+    page.context.close()

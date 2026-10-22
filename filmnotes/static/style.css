@@ -423,3 +423,26 @@ input:focus, select:focus, textarea:focus {
   font-size: 14px; z-index: 60; max-width: 86vw;
   box-shadow: var(--shadow);
 }
+
+/* ------------------------------------------------ offline (2026-10-21) */
+
+.offline-badge {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: .02em;
+  padding: 3px 9px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: var(--accent-ink);
+  white-space: nowrap;
+}
+
+.card.pending { opacity: .55; }
+.card.pending h3 { font-style: italic; }
+.pending-chip {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  border: 1px dashed var(--accent);
+  color: var(--accent);
+}

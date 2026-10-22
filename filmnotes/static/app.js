@@ -13,19 +13,161 @@
 
 const $ = (id) => document.getElementById(id);
 const state = { rolls: [], locations: [], cameras: [], films: [], lenses: [],
-                theme: "auto", show_times: false, lastFix: null };
+                theme: "auto", show_times: false, lastFix: null, pending: [] };
 let edit = null;   // {kind: 'roll'|'loc'|'entry', ...} while an edit modal is open
 
 async function api(path, opts = {}) {
-  const res = await fetch(path, {
-    headers: { "Content-Type": "application/json" },
-    ...opts,
-    body: opts.body ? JSON.stringify(opts.body) : undefined,
-  });
+  const method = (opts.method || "GET").toUpperCase();
+  let res;
+  try {
+    res = await fetch(path, {
+      headers: { "Content-Type": "application/json" },
+      ...opts,
+      body: opts.body ? JSON.stringify(opts.body) : undefined,
+    });
+  } catch (e) {
+    // Network-level failure (no signal). Writes queue into IndexedDB and
+    // replay with an X-Client-Id idempotency key; GETs rethrow (the SW
+    // usually already served the cached copy).
+    if (method !== "GET") {
+      await qAdd({ id: uid(), method, path, body: opts.body || {},
+                   ts: Date.now() });
+      await loadPending();
+      return { offline: true };
+    }
+    throw e;
+  }
   let data = null;
   try { data = await res.json(); } catch (e) { /* non-JSON */ }
   if (!res.ok) throw new Error((data && data.error) || `HTTP ${res.status}`);
   return data;
+}
+
+/* ------------------------------------------------- offline (2026-10-21)
+ * Field reality (Nick): hiking out of coverage the PWA must still open and
+ * keep logging. The SW (templates/sw.js) caches shell + last-seen API data;
+ * writes made offline queue here and replay on reconnect. v1 scope
+ * (approved): creates queue + render greyed "pending" cards; edits and
+ * deletes queue silently and land on sync. Server dedups replays via
+ * X-Client-Id -> sync_log so a lost response cannot double-create.
+ */
+function uid() {
+  return crypto.randomUUID
+    ? crypto.randomUUID()
+    : "op-" + Date.now() + "-" + Math.random().toString(36).slice(2);
+}
+
+let qdbp = null;
+function qdb() {
+  if (!qdbp) qdbp = new Promise((res, rej) => {
+    const r = indexedDB.open("filmnotes-sync", 1);
+    r.onupgradeneeded = () => r.result.createObjectStore("queue", { keyPath: "id" });
+    r.onsuccess = () => res(r.result);
+    r.onerror = () => rej(r.error);
+  });
+  return qdbp;
+}
+function qTx(mode, fn) {
+  return qdb().then((db) => new Promise((res, rej) => {
+    const t = db.transaction("queue", mode);
+    fn(t.objectStore("queue"));
+    t.oncomplete = () => res();
+    t.onerror = () => rej(t.error);
+    t.onabort = () => rej(t.error);
+  }));
+}
+const qAdd = (op) => qTx("readwrite", (s) => s.add(op));
+const qDel = (id) => qTx("readwrite", (s) => s.delete(id));
+async function qAll() {
+  const db = await qdb();
+  return new Promise((res, rej) => {
+    const t = db.transaction("queue").objectStore("queue").getAll();
+    t.onsuccess = () => res(t.result.sort((a, b) => a.ts - b.ts));
+    t.onerror = () => rej(t.error);
+  });
+}
+
+async function loadPending() {
+  try { state.pending = await qAll(); } catch (e) { state.pending = []; }
+  updateBadge();
+}
+
+function updateBadge() {
+  const b = $("offline-badge");
+  if (!b) return;
+  const n = state.pending.length;
+  if (navigator.onLine && !n) { b.hidden = true; return; }
+  b.hidden = false;
+  b.textContent = navigator.onLine
+    ? `Syncing\u2026 ${n}`
+    : "Offline" + (n ? ` \u00b7 ${n} pending` : "");
+}
+
+let syncing = false;
+async function syncUp() {
+  if (syncing || !navigator.onLine) return;
+  syncing = true;
+  let done = 0, rejected = null;
+  try {
+    for (const op of await qAll()) {
+      let res;
+      try {
+        res = await fetch(op.path, {
+          method: op.method,
+          headers: { "Content-Type": "application/json",
+                     "X-Client-Id": op.id },
+          body: JSON.stringify(op.body || {}),
+        });
+      } catch (e) { break; }            // still offline: keep everything
+      if (res.ok) { await qDel(op.id); done++; continue; }
+      if (res.status === 400) {         // validation won't fix itself: drop
+        await qDel(op.id);
+        const d = await res.json().catch(() => ({}));
+        rejected = (d && d.error) || "rejected";
+        continue;
+      }
+      break;                            // 5xx etc: keep queued, retry later
+    }
+  } finally { syncing = false; }
+  await loadPending();
+  if (done) {
+    await refreshData(); route();
+    toast(`Synced ${done} offline write${done > 1 ? "s" : ""}`);
+  } else if (rejected) toast(`Offline write rejected: ${rejected}`);
+}
+
+window.addEventListener("online", () => { updateBadge(); syncUp(); });
+window.addEventListener("offline", updateBadge);
+document.addEventListener("visibilitychange", () => {
+  if (!document.hidden) { updateBadge(); syncUp(); }
+});
+
+function pendingCards(kind) {
+  return state.pending.filter((op) => op.path === (kind === "roll"
+    ? "/api/rolls" : "/api/locations")).map((op) => {
+    const b = op.body || {};
+    if (kind === "roll") {
+      const cam = state.cameras.find((c) => c.id === b.camera_id);
+      const film = state.films.find((f) => f.id === b.film_id);
+      const lens = state.lenses.find((l) => l.id === b.lens_id);
+      const chips = [cam && cam.name, film && film.name, lens && lens.name]
+        .filter(Boolean).map((n) => `<span class="chip">${esc(n)}</span>`)
+        .join("");
+      return `<article class="card pending" aria-label="Pending sync">
+        <h3>Roll pending <span class="chip pending-chip">pending</span></h3>
+        <div class="chips">${chips}</div>
+        ${b.location_name ? `<div class="meta">&#128205; ${esc(b.location_name)}</div>` : ""}
+        <div class="meta">${esc((b.shot_at || "").replace("T", " "))}</div>
+        ${b.note ? `<p class="note">${esc(b.note)}</p>` : ""}
+      </article>`;
+    }
+    return `<article class="card pending" aria-label="Pending sync">
+      <h3>&#128205; ${esc(b.name || "Location")}
+        <span class="chip pending-chip">pending</span></h3>
+      <div class="meta">${b.visited_at ? "visited " + esc(b.visited_at.replace("T", " ")) : ""}</div>
+      ${b.note ? `<p class="note">${esc(b.note)}</p>` : ""}
+    </article>`;
+  }).join("");
 }
 
 function toast(msg) {
@@ -106,7 +248,8 @@ function route() {
 window.addEventListener("hashchange", route);
 
 function renderRolls(view) {
-  if (!state.rolls.length) {
+  const pend = pendingCards("roll");
+  if (!state.rolls.length && !pend) {
     view.innerHTML = `<h1 class="page-title">Rolls</h1>
       <div class="empty">No rolls yet.<br>Tap <b>New Roll</b> below to log your first.</div>`;
     return;
@@ -138,11 +281,12 @@ function renderRolls(view) {
           <b><a class="loc-link" href="${mapUrl(l)}" target="_blank" rel="noopener">&#128205; ${esc(l.name)}</a></b>
           <span class="meta">${esc(fmtDT(l.visited_at))}</span>
           ${l.note ? `<span class="meta">${esc(l.note)}</span>` : ""}</li>`).join("") + `</ul>` : ""}
-    </article>`).join("");
+    </article>`).join("") + pend;
 }
 
 function renderLocations(view) {
-  if (!state.locations.length) {
+  const pend = pendingCards("loc");
+  if (!state.locations.length && !pend) {
     view.innerHTML = `<h1 class="page-title">Locations</h1>
       <div class="empty">No locations yet.<br>Tap <b>New Location</b> below to add one.</div>`;
     return;
@@ -163,7 +307,7 @@ function renderLocations(view) {
       ${l.rolls.length ? `<ul class="sublist">` + l.rolls.map((r) => `
         <li><b>Roll #${esc(r.roll_no)}</b> <span class="meta">${esc(fmtDT(r.visited_at))} · ${esc(r.camera)} · ${esc(r.film)}</span>
         ${r.note ? `<span class="meta">${esc(r.note)}</span>` : ""}</li>`).join("") + `</ul>` : ""}
-    </article>`).join("");
+    </article>`).join("") + pend;
 }
 
 let lensesOpen = false;   // expandable Lenses section on the cameras page
@@ -363,14 +507,14 @@ $("roll-save").addEventListener("click", async () => {
     if ($("roll-lens").value) body.lens_id = Number($("roll-lens").value);
     if (!body.location_name) { toast("Location is required"); return; }
     if (state.lastFix) { body.lat = state.lastFix.lat; body.lon = state.lastFix.lon; }
-    await api("/api/rolls", { method: "POST", body });
+    const out = await api("/api/rolls", { method: "POST", body });
     closeModal("roll-modal");
     $("roll-location").value = "";
     state.lastFix = null;
     await refreshData();
     location.hash = "#/rolls";
     route();
-    toast("Roll saved");
+    toast(out && out.offline ? "Saved offline \u2014 will sync" : "Roll saved");
   } catch (e) { toast(e.message); }
 });
 
@@ -623,7 +767,8 @@ $("loc-save").addEventListener("click", async () => {
     await refreshData();
     if (!(edit && edit.kind === "addloc")) { location.hash = "#/locations"; }
     route();
-    toast(saved.attached_to_roll != null
+    toast(saved.offline ? "Saved offline \u2014 will sync"
+      : saved.attached_to_roll != null
       ? `Location added to Roll #${saved.attached_to_roll_no}` : "Location saved");
   } catch (e) { toast(e.message); }
 });
@@ -865,6 +1010,9 @@ $("loc-detect").addEventListener("click", () => detectLocation($("loc-name")));
 /* ------------------------------------------------------------- boot */
 
 (async function boot() {
+  if ("serviceWorker" in navigator)
+    navigator.serviceWorker.register("/sw.js").catch(() => {});
+  await loadPending();
   try {
     const s = await api("/api/settings");
     applyTheme(s.theme || "auto");
@@ -874,4 +1022,5 @@ $("loc-detect").addEventListener("click", () => detectLocation($("loc-name")));
     await refreshData();
   } catch (e) { toast("Could not reach the server"); }
   route();
+  syncUp();
 })();

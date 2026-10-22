@@ -123,3 +123,25 @@ def test_gear_pages_drop_edit_mode():
     assert "btn.danger" in CSS
     for btn in ("camera-info-delete", "lens-delete", "film-delete"):
         assert f'id="{btn}"' in TEMPLATE
+
+
+def test_service_worker_wiring(client):
+    """Offline story (2026-10-21): sw.js must exist, never be cached itself,
+    and carry the CURRENT asset hash so every deploy re-triggers install."""
+    resp = client.get("/sw.js")
+    assert resp.status_code == 200
+    assert "no-store" in resp.headers["Cache-Control"]
+    sw = resp.data.decode()
+    m = re.search(r'const V = "([0-9a-f]{12})"', sw)
+    assert m, "sw.js must bake the asset content hash"
+    assert f"style.css?v={m.group(1)}" in sw
+    assert f"app.js?v={m.group(1)}" in sw
+    assert "skipWaiting" in sw and "clients.claim" in sw
+    assert 'req.method !== "GET"' in sw   # writes must NOT be intercepted
+
+
+def test_offline_client_wiring():
+    assert 'serviceWorker.register("/sw.js")' in SCRIPT
+    assert "X-Client-Id" in SCRIPT          # replay carries the dedup key
+    assert "indexeddb" in SCRIPT.lower()  # queue survives reloads
+    assert 'id="offline-badge"' in TEMPLATE

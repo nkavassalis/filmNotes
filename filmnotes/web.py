@@ -4,6 +4,7 @@
 requires a JSON object (400 otherwise); _str()/_num() coerce and bound.
 """
 import hashlib
+import json
 import os
 from datetime import datetime
 
@@ -33,6 +34,16 @@ def _asset_version():
         except OSError:
             h.update(name.encode())  # missing file still yields a stable value
     return h.hexdigest()[:12]
+
+
+def _client_id():
+    """Idempotency key from the offline write queue (X-Client-Id header).
+
+    A queued POST replayed after a lost response must not double-create; the
+    first response is stored in sync_log and replayed verbatim.
+    """
+    cid = request.headers.get("X-Client-Id", "").strip()
+    return cid[:64] if cid else None
 
 
 def _body():
@@ -136,6 +147,20 @@ def create_app(db_path, conn=None):
 
     # ------------------------------------------------------------ pages
 
+    @app.route("/sw.js")
+    def sw():
+        """Service worker: the OFFLINE story (2026-10-21).
+
+        Rendered with the asset content hash baked into the precache list,
+        so any deploy changes sw.js byte-for-byte and iOS re-registers it.
+        Must never be cached itself or updates stall forever.
+        """
+        resp = app.make_response(
+            render_template("sw.js", app_version=_asset_version()))
+        resp.mimetype = "application/javascript"
+        resp.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+        return resp
+
     @app.route("/")
     def index():
         return render_template("index.html",
@@ -151,6 +176,11 @@ def create_app(db_path, conn=None):
     @app.post("/api/rolls")
     def api_new_roll():
         data = _body()
+        cid = _client_id()
+        if cid:
+            cached = db.sync_replay(conn, cid)
+            if cached is not None:
+                return app.response_class(cached, mimetype="application/json"), 201
         for k in ("camera_id", "film_id"):
             if not isinstance(data.get(k), int) or isinstance(data.get(k), bool):
                 raise BadRequest(f"{k} must be an integer")
@@ -179,6 +209,8 @@ def create_app(db_path, conn=None):
                 conn, name, _num(data, "lat"), _num(data, "lon"), shot_at)
         roll = db.add_roll(conn, data["camera_id"], data["film_id"],
                            loc["id"], note, shot_at, roll_no or None, lens_id)
+        if cid:
+            db.sync_record(conn, cid, "POST /api/rolls", json.dumps(roll))
         return jsonify(roll), 201
 
     # ------------------------------------------------------------ locations
@@ -199,6 +231,11 @@ def create_app(db_path, conn=None):
         standalone and the note lands on the location itself.
         """
         data = _body()
+        cid = _client_id()
+        if cid:
+            cached = db.sync_replay(conn, cid)
+            if cached is not None:
+                return app.response_class(cached, mimetype="application/json"), 201
         name = _str(data, "name", required=True)
         note = _note(data)
         visited_at = _datetime(data, "visited_at")
@@ -223,6 +260,8 @@ def create_app(db_path, conn=None):
         loc = dict(db.get_location(conn, loc["id"]))
         loc["attached_to_roll"] = attached
         loc["attached_to_roll_no"] = target["roll_no"] if attached else None
+        if cid:
+            db.sync_record(conn, cid, "POST /api/locations", json.dumps(loc))
         return jsonify(loc), 201
 
     # ------------------------------------------------------------ cameras

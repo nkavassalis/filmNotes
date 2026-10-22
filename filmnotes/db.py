@@ -89,6 +89,12 @@ CREATE INDEX IF NOT EXISTS idx_roll_locations_loc  ON roll_locations(location_id
 CREATE INDEX IF NOT EXISTS idx_roll_locations_roll ON roll_locations(roll_id);
 CREATE INDEX IF NOT EXISTS idx_rolls_camera   ON rolls(camera_id);
 CREATE INDEX IF NOT EXISTS idx_rolls_film     ON rolls(film_id);
+CREATE TABLE IF NOT EXISTS sync_log (
+  client_id     TEXT PRIMARY KEY,
+  endpoint      TEXT NOT NULL,
+  response_json TEXT NOT NULL,
+  created_at    TEXT NOT NULL
+);
 """
 
 
@@ -663,3 +669,22 @@ def delete_location(conn, location_id):
     conn.execute("DELETE FROM locations WHERE id=?", (location_id,))
     conn.commit()
     return True
+
+
+# ------------------------------------------------------------- offline sync
+
+def sync_replay(conn, client_id):
+    """Stored response JSON for a replayed (deduped) write, or None."""
+    row = conn.execute(
+        "SELECT response_json FROM sync_log WHERE client_id=?",
+        (client_id,)).fetchone()
+    return row[0] if row else None
+
+
+def sync_record(conn, client_id, endpoint, response_json):
+    """Remember a write's response so an offline retry can't double-create."""
+    conn.execute(
+        "INSERT OR IGNORE INTO sync_log "
+        "(client_id, endpoint, response_json, created_at) VALUES (?,?,?,?)",
+        (client_id, endpoint, response_json, now()))
+    conn.commit()

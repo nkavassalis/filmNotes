@@ -620,3 +620,31 @@ def test_film_note_api(client):
     assert get_json(client.get("/api/films"))[0]["note"] == "half stop under"
     assert client.put("/api/films/99999", json={"note": "x"}).status_code == 404
     assert client.put(f"/api/films/{film['id']}", json={}).status_code == 400
+
+
+# ------------------------------------------------------ offline replay/dedup
+
+def test_offline_replay_dedupes_roll(client):
+    body = dict(camera_id=1, film_id=1, location_name="Dedup Hollow")
+    h = {"X-Client-Id": "cid-roll-1"}
+    r1 = client.post("/api/rolls", json=body, headers=h)
+    r2 = client.post("/api/rolls", json=body, headers=h)
+    assert r1.status_code == 201 and r2.status_code == 201
+    assert r1.get_json()["id"] == r2.get_json()["id"]
+    assert len(client.get("/api/rolls").get_json()) == 1
+
+
+def test_offline_replay_dedupes_location(client):
+    body = dict(name="Dedup Pond", note="x")
+    h = {"X-Client-Id": "cid-loc-1"}
+    r1 = client.post("/api/locations", json=body, headers=h)
+    r2 = client.post("/api/locations", json=body, headers=h)
+    assert r1.get_json()["id"] == r2.get_json()["id"]
+    assert len(client.get("/api/locations").get_json()) == 1
+
+
+def test_writes_without_client_id_are_never_deduped(client):
+    body = dict(camera_id=1, film_id=1, location_name="Twice Hollow")
+    a = client.post("/api/rolls", json=body).get_json()
+    b = client.post("/api/rolls", json=body).get_json()
+    assert a["id"] != b["id"]

@@ -30,6 +30,9 @@ filmnotes/
                            /api/* errors are ALWAYS JSON, never HTML 500.
   templates/index.html     single page. Overlays ship hidden; ids are
                            contract-tested against app.js (test_ui_contract).
+  templates/sw.js          service worker (rendered by the /sw.js route with
+                           the asset hash baked in): offline shell + API
+                           cache; see "Offline" under Design decisions.
   static/app.js            one script: hash router (#/rolls #/locations
                            #/cameras #/film), render fns, drawer + swipe,
                            modals, theme, geolocation->Nominatim.
@@ -269,6 +272,36 @@ the ui tier fails with "Executable doesn't exist" and you must
   failure degrades to "lat, lon" text; the field is ALWAYS an editable
   override (spec). Tests stub geolocation and route-intercept Nominatim
   (both /search and /reverse).
+- **Offline (2026-10-21, Nick backcountry report: "the app didnt load at
+  all")** — three cooperating pieces:
+  1. `filmnotes/templates/sw.js` (served by the `/sw.js` Flask route with
+     `no-store` + the asset content hash baked in, so every deploy
+     re-triggers SW install): precaches the shell; navigation and statics
+     are stale-while-revalidate; **`/api/*` GETs are NETWORK-FIRST with the
+     cache as offline-fallback only** — SWR on the API broke
+     read-your-writes (refreshData showed pre-write data; the browser
+     suite caught it, do not revert to SWR there). Non-GET and cross-origin
+     requests are never intercepted (the queue owns offline writes).
+  2. `app.js` write queue: `api()` catches network-level failures on
+     non-GET, stores `{id, method, path, body, ts}` in IndexedDB
+     (`filmnotes-sync/queue`), returns `{offline:true}`; `syncUp()` replays
+     oldest-first on `online` event / boot / tab-visible, sending
+     `X-Client-Id: <id>`. 400 responses are dropped with a toast (retrying
+     won't fix validation); 5xx/network errors keep the queue. v1 scope
+     (Nick-approved): queued **creates** render as greyed `.card.pending`
+     rows; edits/deletes queue silently. Topbar `#offline-badge` shows
+     Offline / N pending / Syncing… — never weaken it, silent offline is
+     dangerous (queue lives only in that browser profile).
+  3. Server dedup: `sync_log(client_id PK, endpoint, response_json,
+     created_at)` + `db.sync_replay/sync_record`; `POST /api/rolls` and
+     `POST /api/locations` honour `X-Client-Id` so a replayed write after a
+     lost response returns the FIRST result instead of double-creating.
+     Other write endpoints deliberately do not (v1 scope).
+  Tests: hermetic dedup trio in test_api.py; contract pair in
+  test_ui_contract.py (sw no-store + hash bake + no-GET-passthrough, badge
+  present); `context.set_offline(True)` flows in test_ui_real.py. UI tests
+  must reload once AFTER `navigator.serviceWorker.ready` so boot GETs flow
+  through the SW and prime the cache before going offline.
 - **Rolls create locations implicitly** by name (case-insensitive match,
   `get_or_create_location`). New Location modal shows the most recent roll
   as read-only "current camera / current roll" (`db.current_roll`,
